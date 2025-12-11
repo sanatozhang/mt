@@ -31,12 +31,14 @@ export PATH="/path/to/mt/bin:$PATH"
    # 进入你的项目目录
    cd /path/to/your/project
    
-   # 初始化配置
+   # 初始化配置（自动从 mt 仓库复制或生成默认配置）
    mt init
    
    # 使用工具
-   mt checkout -b feature/new-feature
-   mt status
+   mt checkout -b feature/new-feature  # 所有仓库切换分支
+   mt status                            # 查看所有仓库状态
+   mt build cn -r                       # 构建 CN release 包
+   mt install global                    # 构建并安装到设备
    ```
 
 3. **更新工具**：

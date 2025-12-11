@@ -37,12 +37,26 @@ fi
 
 # 颜色定义（根据 USE_COLOR 决定是否使用）
 if [[ "$USE_COLOR" == "true" ]]; then
+    # 基础颜色
     RED='\033[0;31m'
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
     BLUE='\033[0;34m'
     CYAN='\033[0;36m'
     NC='\033[0m' # No Color
+    
+    # 加粗颜色（用于强调）
+    BOLD_RED='\033[1;31m'
+    BOLD_GREEN='\033[1;32m'
+    BOLD_YELLOW='\033[1;33m'
+    BOLD_BLUE='\033[1;34m'
+    BOLD_CYAN='\033[1;36m'
+    
+    # 亮色（用于命令输出）
+    BRIGHT_CYAN='\033[0;96m'      # 亮青色 - 用于执行的命令
+    BRIGHT_BLUE='\033[0;94m'      # 亮蓝色 - 用于命令输出
+    DIM='\033[2m'                  # 暗淡色 - 用于次要信息
+    GRAY='\033[0;90m'              # 灰色 - 用于命令输出
 else
     RED=''
     GREEN=''
@@ -50,6 +64,15 @@ else
     BLUE=''
     CYAN=''
     NC=''
+    BOLD_RED=''
+    BOLD_GREEN=''
+    BOLD_YELLOW=''
+    BOLD_BLUE=''
+    BOLD_CYAN=''
+    BRIGHT_CYAN=''
+    BRIGHT_BLUE=''
+    DIM=''
+    GRAY=''
 fi
 
 # 图标
@@ -131,12 +154,44 @@ find_project_root() {
 PROJECT_ROOT="$(find_project_root "$(pwd)")"
 CONFIG_FILE="${PROJECT_ROOT}/.mt-config.yaml"
 
-# 检查配置文件是否存在
+# 检查配置文件是否存在，如果不存在则自动从 mt 仓库复制
 check_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo -e "${RED}错误: 配置文件不存在${NC}"
-        echo -e "${YELLOW}请先运行: mt init${NC}"
-        exit 1
+        # 尝试从 mt 仓库复制配置文件
+        local mt_config="${MT_DIR}/.mt-config.yaml"
+        
+        if [[ -f "$mt_config" ]]; then
+            echo -e "${YELLOW}配置文件不存在，正在从 mt 仓库自动复制...${NC}"
+            cp "$mt_config" "$CONFIG_FILE"
+            echo -e "${GREEN}${CHECK_MARK} 配置文件已自动复制到: ${CONFIG_FILE}${NC}"
+            echo ""
+            return 0
+        fi
+        
+        # 如果 mt 仓库中也没有配置文件，生成默认配置
+        echo -e "${YELLOW}配置文件不存在，正在生成默认配置...${NC}"
+        cat > "$CONFIG_FILE" << 'EOF'
+repositories:
+  - name: plaud-flutter-cn
+    path: plaud-flutter-cn
+    url: git@github.com:Plaud-AI/plaud-flutter-cn.git
+  - name: plaud-flutter-global
+    path: plaud-flutter-global
+    url: git@github.com:Plaud-AI/plaud-flutter-global.git
+  - name: plaud-flutter-common
+    path: plaud-flutter-common
+    url: git@github.com:Plaud-AI/plaud-flutter-common.git
+  - name: plaud-android
+    path: plaud-android
+    url: git@github.com:Plaud-AI/plaud-android.git
+  - name: plaud-ios
+    path: plaud-ios
+    url: git@github.com:Plaud-AI/plaud-ios.git
+EOF
+        echo -e "${GREEN}${CHECK_MARK} 默认配置文件已生成: ${CONFIG_FILE}${NC}"
+        echo -e "${YELLOW}提示: 你可以编辑配置文件来添加或修改仓库${NC}"
+        echo ""
+        return 0
     fi
 }
 
@@ -220,8 +275,9 @@ print_command() {
     done
     cmd_str="${cmd_str# }"  # 移除开头的空格
     
-    echo -e "${CYAN}  → cd ${work_dir}${NC}"
-    echo -e "${CYAN}  → ${cmd_str}${NC}"
+    # 使用亮青色和加粗，让命令更明显
+    echo -e "${BOLD_CYAN}  → cd ${work_dir}${NC}"
+    echo -e "${BOLD_CYAN}  → ${cmd_str}${NC}"
 }
 
 # 执行 Git 命令
@@ -237,14 +293,14 @@ execute_git_command() {
     
     # 检查路径是否存在
     if [[ ! -d "$repo_path" ]]; then
-        echo -e "${YELLOW}  警告: 路径不存在 ${path}${NC}"
+        echo -e "${BOLD_YELLOW}  警告: 路径不存在 ${path}${NC}"
         return 1
     fi
     
     # 检查是否是 Git 仓库（支持普通仓库和 Submodule）
     # Submodule 的 .git 是文件，普通仓库的 .git 是目录
     if [[ ! -d "${repo_path}/.git" ]] && [[ ! -f "${repo_path}/.git" ]]; then
-        echo -e "${YELLOW}  警告: 不是 Git 仓库 ${path}${NC}"
+        echo -e "${BOLD_YELLOW}  警告: 不是 Git 仓库 ${path}${NC}"
         return 1
     fi
     
@@ -261,43 +317,99 @@ format_output() {
     local success=$4
     local output=$5
     
-    echo -e "${CYAN}[${index}/${total}] ${name}${NC}"
+    # 使用亮蓝色显示仓库名称，更明显
+    echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
     
     # 显示命令输出（如果有）
     if [[ -n "$output" ]]; then
-        echo -e "${output}" | sed 's/^/  /'
+        # 根据成功/失败状态使用不同颜色
+        if [[ "$success" == "0" ]]; then
+            # 成功：使用灰色显示输出，让输出更明显但不抢眼
+            while IFS= read -r line; do
+                echo -e "  ${GRAY}${line}${NC}"
+            done <<< "$output"
+        else
+            # 失败：使用红色显示错误输出，更明显
+            while IFS= read -r line; do
+                echo -e "  ${RED}${line}${NC}"
+            done <<< "$output"
+        fi
     fi
     
     if [[ "$success" == "0" ]]; then
-        # 根据命令类型显示不同的成功消息
+        # 根据命令类型显示不同的成功消息，使用加粗绿色
         if [[ "${git_args[0]}" == "checkout" ]] && [[ "${git_args[1]}" == "-b" ]]; then
             local branch_name="${git_args[2]}"
-            echo -e "${GREEN}  ${CHECK_MARK} 已创建并切换到分支: ${branch_name}${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 已创建并切换到分支: ${branch_name}${NC}"
         elif [[ "${git_args[0]}" == "checkout" ]]; then
             local branch_name="${git_args[1]}"
-            echo -e "${GREEN}  ${CHECK_MARK} 已切换到分支: ${branch_name}${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 已切换到分支: ${branch_name}${NC}"
         elif [[ "${git_args[0]}" == "commit" ]]; then
-            echo -e "${GREEN}  ${CHECK_MARK} 提交成功${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 提交成功${NC}"
         elif [[ "${git_args[0]}" == "push" ]]; then
-            echo -e "${GREEN}  ${CHECK_MARK} 推送成功${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 推送成功${NC}"
         elif [[ "${git_args[0]}" == "pull" ]]; then
-            echo -e "${GREEN}  ${CHECK_MARK} 拉取成功${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 拉取成功${NC}"
         elif [[ "${git_args[0]}" == "add" ]]; then
-            echo -e "${GREEN}  ${CHECK_MARK} 添加成功${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 添加成功${NC}"
         elif [[ "${git_args[0]}" == "merge" ]]; then
-            echo -e "${GREEN}  ${CHECK_MARK} 合并成功${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 合并成功${NC}"
         elif [[ "${git_args[0]}" == "rebase" ]]; then
-            echo -e "${GREEN}  ${CHECK_MARK} 变基成功${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 变基成功${NC}"
         else
-            echo -e "${GREEN}  ${CHECK_MARK} 执行成功${NC}"
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 执行成功${NC}"
         fi
     else
-        echo -e "${RED}  ${CROSS_MARK} 执行失败${NC}"
+        # 失败：使用加粗红色，更明显
+        echo -e "${BOLD_RED}  ${CROSS_MARK} 执行失败${NC}"
     fi
     echo ""
 }
 
 # 检查仓库是否有修改（用于 commit 和 push）
+get_branch_base_ref() {
+    local repo_path="$1"
+    local branch="$2"
+    
+    local base_ref=""
+    local created_from_line=""
+    local created_commit=""
+    
+    # 1) 优先从分支 reflog 获取 "branch: Created from <ref>"
+    created_from_line=$(
+        cd "$repo_path" \
+        && git reflog show --format='%H|%gs' "$branch" 2>/dev/null \
+        | grep -E '\|branch: Created from ' \
+        | tail -n 1 \
+        || true
+    )
+    
+    if [[ -n "$created_from_line" ]]; then
+        created_commit="${created_from_line%%|*}"
+        base_ref="${created_from_line#*|}"
+        base_ref="${base_ref#branch: Created from }"
+        
+        # reflog 里可能是 HEAD，无法直接作为比较基线；用创建时的提交作为基线
+        if [[ "$base_ref" == "HEAD" ]]; then
+            base_ref="$created_commit"
+        fi
+    fi
+    
+    # 2) 如果分支 reflog 没拿到，再从 HEAD reflog 找 checkout 记录
+    if [[ -z "$base_ref" ]]; then
+        base_ref=$(
+            cd "$repo_path" \
+            && git reflog show --format='%gs' HEAD 2>/dev/null \
+            | grep -E "^checkout: moving from .* to ${branch}$" \
+            | tail -n 1 \
+            | sed -E "s/^checkout: moving from (.*) to ${branch}$/\1/" \
+            || true
+        )
+    fi
+    
+    echo "$base_ref"
+}
+
 check_repo_has_changes() {
     local repo_info="$1"
     local command_type="$2"  # "commit" 或 "push"
@@ -376,55 +488,103 @@ check_repo_has_changes() {
         # 先获取远程分支信息（静默执行）
         (cd "$repo_path" && git fetch "$push_remote" "$push_branch" 2>/dev/null || true)
         
+        # 检查本地分支是否存在
+        if ! (cd "$repo_path" && git rev-parse --verify "$current_branch" >/dev/null 2>&1); then
+            return 1  # 本地分支不存在，不需要 push
+        fi
+        
         # 检查远程分支是否存在
         local remote_branch_exists
         remote_branch_exists=$(cd "$repo_path" && git ls-remote --heads "$push_remote" "$push_branch" 2>/dev/null | grep -q "$push_branch" && echo "yes" || echo "no")
         
         if [[ "$remote_branch_exists" == "no" ]]; then
-            # 远程分支不存在，检查本地分支是否有提交
-            # 如果本地分支存在且有提交，需要首次推送
-            if [[ -n "$current_branch" ]]; then
-                local local_commits=$(cd "$repo_path" && git rev-list --count HEAD 2>/dev/null || echo "0")
-                if [[ "$local_commits" -gt 0 ]]; then
-                    return 0  # 本地有提交，需要 push（首次推送）
+            # 远程分支不存在：
+            # 1) 优先找当前分支切出的基线分支/引用（reflog）
+            # 2) 如果相对基线没有新增提交（base..current = 0），则不需要 push（避免推一个“空分支”到远程）
+            local base_ref
+            base_ref=$(get_branch_base_ref "$repo_path" "$current_branch")
+            
+            # 尝试把 base_ref 解析成一个可用的 ref（本地分支 / 远程跟踪分支 / commit）
+            if [[ -n "$base_ref" ]]; then
+                if ! (cd "$repo_path" && git rev-parse --verify "$base_ref" >/dev/null 2>&1); then
+                    # reflog 可能返回的是短分支名，但本地只有远程跟踪分支
+                    if (cd "$repo_path" && git rev-parse --verify "${push_remote}/${base_ref}" >/dev/null 2>&1); then
+                        base_ref="${push_remote}/${base_ref}"
+                    fi
                 fi
             fi
-            return 1  # 本地也没有提交，不需要 push
+            
+            if [[ -n "$base_ref" ]] && (cd "$repo_path" && git rev-parse --verify "$base_ref" >/dev/null 2>&1); then
+                local ahead_from_base
+                ahead_from_base=$(cd "$repo_path" && git rev-list --count "${base_ref}..${current_branch}" 2>/dev/null || echo "0")
+                
+                if [[ "$ahead_from_base" -gt 0 ]]; then
+                    return 0  # 相对基线有新增提交，需要 push（首次推送创建远程分支）
+                fi
+                
+                # 相对基线没有新增提交，不需要 push
+                return 1
+            fi
+            
+            # 基线不可用时的兜底：
+            # 如果当前提交已经被任意远程分支包含，则不需要 push（创建同指向的远程分支没有意义）
+            if (cd "$repo_path" && git branch -r --contains HEAD 2>/dev/null | grep -E "^[[:space:]]*${push_remote}/" -q); then
+                return 1
+            fi
+            
+            # 无法判定基线，保守处理：如果本地分支确实有提交，就允许 push
+            local local_commits
+            local_commits=$(cd "$repo_path" && git rev-list --count "$current_branch" 2>/dev/null || echo "0")
+            if [[ "$local_commits" -gt 0 ]]; then
+                return 0
+            fi
+            
+            return 1
         fi
         
-        # 远程分支存在，检查本地分支和远程分支是否有实际的代码差异
+        # 远程分支存在，检查本地分支是否领先于远程分支
         # 先获取远程分支的最新信息
         (cd "$repo_path" && git fetch "$push_remote" "$push_branch" 2>/dev/null || true)
-        
-        # 检查本地分支是否存在
-        if ! (cd "$repo_path" && git rev-parse --verify "$current_branch" >/dev/null 2>&1); then
-            return 1  # 本地分支不存在
-        fi
         
         # 检查本地分支和远程分支是否有共同的历史
         local common_base
         common_base=$(cd "$repo_path" && git merge-base "$current_branch" "${push_remote}/${push_branch}" 2>/dev/null || echo "")
         
         if [[ -z "$common_base" ]]; then
-            # 没有共同历史，检查本地是否有提交（可能是完全不同的分支）
+            # 没有共同历史，可能是完全不同的分支
+            # 这种情况下，如果用户明确要 push，应该允许，但这里我们保守处理
+            # 检查本地分支是否有提交
             local local_commits=$(cd "$repo_path" && git rev-list --count "$current_branch" 2>/dev/null || echo "0")
             if [[ "$local_commits" -gt 0 ]]; then
-                return 0  # 本地有提交，可能需要 push
+                # 有提交，但需要用户明确指定（比如使用 --force）
+                # 这里我们返回 0，让 push 执行，但实际 push 可能会失败，需要用户处理
+                return 0
             fi
             return 1  # 本地没有提交，不需要 push
         fi
         
-        # 检查本地分支和远程分支是否有实际的代码差异
+        # 检查本地分支是否领先于远程分支（有未推送的提交）
+        # 使用 git rev-list 计算本地分支相对于远程分支的提交数量
+        local ahead_count
+        ahead_count=$(cd "$repo_path" && git rev-list --count "${push_remote}/${push_branch}..${current_branch}" 2>/dev/null || echo "0")
+        
+        if [[ "$ahead_count" -gt 0 ]]; then
+            # 本地分支领先于远程分支，需要 push
+            return 0
+        fi
+        
+        # 检查是否有文件差异（即使提交数相同，也可能有内容差异）
         # 使用 git diff 检查是否有任何文件变更
         local has_diff
         has_diff=$(cd "$repo_path" && git diff --quiet "${push_remote}/${push_branch}..${current_branch}" 2>/dev/null && echo "no" || echo "yes")
         
-        if [[ "$has_diff" == "no" ]]; then
-            return 1  # 没有代码差异，不需要 push
+        if [[ "$has_diff" == "yes" ]]; then
+            # 有代码差异，需要 push
+            return 0
         fi
         
-        # 有代码差异，需要 push
-        return 0
+        # 没有未推送的提交，也没有代码差异，不需要 push
+        return 1
     fi
     
     return 1  # 默认返回没有修改
@@ -441,7 +601,7 @@ run_command() {
     read -ra repos_array <<< "$(get_repositories)"
     
     if [[ ${#repos_array[@]} -eq 0 ]]; then
-        echo -e "${RED}错误: 未找到任何仓库配置${NC}"
+        echo -e "${BOLD_RED}错误: 未找到任何仓库配置${NC}"
         exit 1
     fi
     
@@ -451,8 +611,9 @@ run_command() {
     local failed_repos=()
     local skipped_repos=()
     
-    echo -e "${BLUE}执行命令: git ${git_args[*]}${NC}"
-    echo -e "${BLUE}仓库数量: ${total}${NC}"
+    # 使用加粗蓝色显示命令信息，更明显
+    echo -e "${BOLD_BLUE}执行命令: git ${git_args[*]}${NC}"
+    echo -e "${BOLD_BLUE}仓库数量: ${total}${NC}"
     echo ""
     
     # 串行执行
@@ -465,10 +626,10 @@ run_command() {
         local exit_code
         local repo_path="${PROJECT_ROOT}/$(echo "$repo_info" | cut -d'|' -f2)"
         
-        # 对于 commit 和 push 命令，检查是否有修改
+        # 对于 commit / push / diff 命令，按需跳过没有变化的仓库
         if [[ "${git_args[0]}" == "commit" ]]; then
             if ! check_repo_has_changes "$repo_info" "commit" "${git_args[@]}"; then
-                echo -e "${CYAN}[${index}/${total}] ${name}${NC}"
+                echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
                 echo -e "${YELLOW}  ⏭  跳过: 没有需要提交的修改${NC}"
                 echo ""
                 ((skipped_count++))
@@ -477,8 +638,23 @@ run_command() {
             fi
         elif [[ "${git_args[0]}" == "push" ]]; then
             if ! check_repo_has_changes "$repo_info" "push" "${git_args[@]}"; then
-                echo -e "${CYAN}[${index}/${total}] ${name}${NC}"
+                echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
                 echo -e "${YELLOW}  ⏭  跳过: 没有需要推送的代码变更${NC}"
+                echo ""
+                ((skipped_count++))
+                skipped_repos+=("$name")
+                continue
+            fi
+        elif [[ "${git_args[0]}" == "diff" ]]; then
+            # git diff 默认返回 0（即使有 diff），因此用 --quiet 做差异探测
+            # exit code: 0=无差异, 1=有差异, 其他=错误（交给后续 execute_git_command 输出错误信息）
+            local diff_probe_exit=0
+            (cd "$repo_path" && git diff --quiet "${git_args[@]:1}" 2>/dev/null)
+            diff_probe_exit=$?
+            
+            if [[ $diff_probe_exit -eq 0 ]]; then
+                echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
+                echo -e "${YELLOW}  ⏭  没有变化${NC}"
                 echo ""
                 ((skipped_count++))
                 skipped_repos+=("$name")
@@ -503,21 +679,21 @@ run_command() {
         unset exit_code
     done
     
-    # 汇总结果
+    # 汇总结果 - 使用加粗颜色让总结更明显
     echo ""
     local processed_count=$((success_count + ${#failed_repos[@]}))
     if [[ $success_count -eq $processed_count ]] && [[ $processed_count -gt 0 ]]; then
         if [[ $skipped_count -gt 0 ]]; then
-            echo -e "${GREEN}${CHECK_MARK} 所有需要处理的仓库执行成功 (${success_count}/${processed_count})${NC}"
+            echo -e "${BOLD_GREEN}${CHECK_MARK} 所有需要处理的仓库执行成功 (${success_count}/${processed_count})${NC}"
             echo -e "${YELLOW}  跳过仓库 (${skipped_count}): ${skipped_repos[*]}${NC}"
         else
-            echo -e "${GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${total})${NC}"
+            echo -e "${BOLD_GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${total})${NC}"
         fi
         return 0
     elif [[ ${#failed_repos[@]} -gt 0 ]]; then
-        echo -e "${YELLOW}${CROSS_MARK} 部分仓库执行失败 (成功: ${success_count}, 失败: ${#failed_repos[@]}, 跳过: ${skipped_count})${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} 部分仓库执行失败 (成功: ${success_count}, 失败: ${#failed_repos[@]}, 跳过: ${skipped_count})${NC}"
         if [[ ${#failed_repos[@]} -gt 0 ]]; then
-            echo -e "${RED}失败仓库: ${failed_repos[*]}${NC}"
+            echo -e "${BOLD_RED}失败仓库: ${failed_repos[*]}${NC}"
         fi
         if [[ $skipped_count -gt 0 ]]; then
             echo -e "${YELLOW}跳过仓库: ${skipped_repos[*]}${NC}"
@@ -527,7 +703,7 @@ run_command() {
         echo -e "${YELLOW}⏭  所有仓库都没有修改，已跳过${NC}"
         return 0
     else
-        echo -e "${GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${total})${NC}"
+        echo -e "${BOLD_GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${total})${NC}"
         return 0
     fi
 }
@@ -579,9 +755,12 @@ list_repositories() {
 
 # 初始化配置文件
 init_config() {
-    # 检查配置文件是否已存在
-    if [[ -f "$CONFIG_FILE" ]]; then
-        echo -e "${YELLOW}配置文件已存在: ${CONFIG_FILE}${NC}"
+    local target_config="${PROJECT_ROOT}/.mt-config.yaml"
+    local mt_config="${MT_DIR}/.mt-config.yaml"
+    
+    # 如果项目根目录已有配置文件，询问是否覆盖
+    if [[ -f "$target_config" ]]; then
+        echo -e "${YELLOW}配置文件已存在: ${target_config}${NC}"
         read -p "是否覆盖? (y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -590,10 +769,19 @@ init_config() {
         fi
     fi
     
+    # 优先使用 mt 仓库中的配置文件
+    if [[ -f "$mt_config" ]]; then
+        echo -e "${BLUE}从 mt 仓库复制配置文件...${NC}"
+        cp "$mt_config" "$target_config"
+        echo -e "${GREEN}${CHECK_MARK} 配置文件已复制到: ${target_config}${NC}"
+        return 0
+    fi
+    
+    # 如果 mt 仓库中没有配置文件，生成默认配置
     echo -e "${BLUE}生成默认配置文件...${NC}"
     
     # 创建配置文件（使用默认的仓库配置）
-    cat > "$CONFIG_FILE" << 'EOF'
+    cat > "$target_config" << 'EOF'
 repositories:
   - name: plaud-flutter-cn
     path: plaud-flutter-cn
@@ -612,7 +800,7 @@ repositories:
     url: git@github.com:Plaud-AI/plaud-ios.git
 EOF
     
-    echo -e "${GREEN}${CHECK_MARK} 配置文件已生成: ${CONFIG_FILE}${NC}"
+    echo -e "${GREEN}${CHECK_MARK} 配置文件已生成: ${target_config}${NC}"
     echo -e "${YELLOW}提示: 你可以编辑配置文件来添加或修改仓库${NC}"
 }
 
@@ -631,7 +819,7 @@ set_github_token() {
     local token="$1"
     
     if [[ -z "$token" ]]; then
-        echo -e "${RED}错误: 请提供 GitHub token${NC}"
+        echo -e "${BOLD_RED}错误: 请提供 GitHub token${NC}"
         echo -e "${YELLOW}用法: mt set-github-token <your_token>${NC}"
         echo -e "${CYAN}获取 token: https://github.com/settings/tokens${NC}"
         return 1
@@ -669,7 +857,7 @@ upgrade_mt() {
     
     # 检查是否是 Git 仓库（支持普通仓库和 Submodule）
     if [[ ! -d "${mt_repo_dir}/.git" ]] && [[ ! -f "${mt_repo_dir}/.git" ]]; then
-        echo -e "${RED}错误: 无法找到 mt Git 仓库${NC}"
+        echo -e "${BOLD_RED}错误: 无法找到 mt Git 仓库${NC}"
         echo -e "${YELLOW}当前脚本路径: ${BASH_SOURCE[0]}${NC}"
         echo -e "${YELLOW}计算的 mt 目录: ${mt_repo_dir}${NC}"
         echo -e "${YELLOW}请确保 mt 工具是从 Git 仓库安装的${NC}"
@@ -681,7 +869,7 @@ upgrade_mt() {
     current_branch=$(cd "$MT_DIR" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
     
     if [[ -z "$current_branch" ]]; then
-        echo -e "${RED}错误: 无法获取当前分支${NC}"
+        echo -e "${BOLD_RED}错误: 无法获取当前分支${NC}"
         return 1
     fi
     
@@ -696,7 +884,7 @@ upgrade_mt() {
     print_command "$mt_repo_dir" git fetch origin
     
     (cd "$mt_repo_dir" && git fetch origin 2>&1) || {
-        echo -e "${RED}错误: 获取远程更新失败${NC}"
+        echo -e "${BOLD_RED}错误: 获取远程更新失败${NC}"
         return 1
     }
     echo -e "${GREEN}${CHECK_MARK} 远程更新获取成功${NC}"
@@ -743,19 +931,226 @@ upgrade_mt() {
     print_command "$mt_repo_dir" git pull origin "${target_branch}"
     
     (cd "$mt_repo_dir" && git pull origin "${target_branch}" 2>&1) || {
-        echo -e "${RED}错误: 更新失败${NC}"
+        echo -e "${BOLD_RED}错误: 更新失败${NC}"
         echo -e "${YELLOW}请手动执行: cd ${mt_repo_dir} && git pull origin ${target_branch}${NC}"
         return 1
     }
     
     echo ""
-    echo -e "${GREEN}${CHECK_MARK} 更新成功！${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} 更新成功！${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
     echo -e "${CYAN}当前版本:${NC}"
     (cd "$mt_repo_dir" && git log --oneline -1)
     echo ""
     echo -e "${YELLOW}提示: 如果 mt 命令已安装，可能需要重新安装以使用新版本${NC}"
+    return 0
+}
+
+# 删除分支函数
+delete_branches() {
+    local delete_all=false
+    
+    # 解析参数
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -a|--a|--all)
+                delete_all=true
+                shift
+                ;;
+            *)
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                echo -e "${YELLOW}用法: mt delete [-a|--all]${NC}"
+                return 1
+                ;;
+        esac
+    done
+    
+    check_config
+    
+    # 获取仓库列表
+    local repos_array
+    read -ra repos_array <<< "$(get_repositories)"
+    
+    if [[ ${#repos_array[@]} -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 未找到任何仓库配置${NC}"
+        exit 1
+    fi
+    
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  删除本地分支${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    local total=${#repos_array[@]}
+    local success_count=0
+    local skipped_count=0
+    
+    for i in "${!repos_array[@]}"; do
+        local repo_info="${repos_array[$i]}"
+        IFS='|' read -r name path url <<< "$repo_info"
+        
+        local repo_path="${PROJECT_ROOT}/${path}"
+        local index=$((i + 1))
+        
+        echo -e "${CYAN}[${index}/${total}] ${name}${NC}"
+        
+        # 检查路径是否存在
+        if [[ ! -d "$repo_path" ]]; then
+            echo -e "${YELLOW}  ⏭  跳过: 路径不存在 ${path}${NC}"
+            echo ""
+            ((skipped_count++))
+            continue
+        fi
+        
+        # 检查是否是 Git 仓库（支持普通仓库和 Submodule）
+        if [[ ! -d "${repo_path}/.git" ]] && [[ ! -f "${repo_path}/.git" ]]; then
+            echo -e "${YELLOW}  ⏭  跳过: 不是 Git 仓库 ${path}${NC}"
+            echo ""
+            ((skipped_count++))
+            continue
+        fi
+        
+        # 获取当前分支
+        local current_branch
+        current_branch=$(cd "$repo_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        if [[ -z "$current_branch" ]]; then
+            echo -e "${YELLOW}  ⏭  跳过: 无法获取当前分支${NC}"
+            echo ""
+            ((skipped_count++))
+            continue
+        fi
+        
+        # 获取所有本地分支（排除当前分支和 main/master）
+        local branches=()
+        while IFS= read -r branch; do
+            # 移除分支名前的 * 和空格
+            branch=$(echo "$branch" | sed 's/^[* ]*//')
+            # 排除当前分支和主分支
+            if [[ "$branch" != "$current_branch" ]] && [[ "$branch" != "main" ]] && [[ "$branch" != "master" ]]; then
+                branches+=("$branch")
+            fi
+        done < <(cd "$repo_path" && git branch 2>/dev/null)
+        
+        local branch_count=${#branches[@]}
+        
+        if [[ $branch_count -eq 0 ]]; then
+            echo -e "${YELLOW}  ⏭  跳过: 没有可删除的分支${NC}"
+            echo ""
+            ((skipped_count++))
+            continue
+        fi
+        
+        if [[ "$delete_all" == true ]]; then
+            # 删除所有分支（除了当前分支和 main/master）
+            echo -e "${CYAN}  当前分支: ${current_branch}${NC}"
+            echo -e "${CYAN}  将删除 ${branch_count} 个分支${NC}"
+            echo ""
+            
+            local deleted_count=0
+            local failed_count=0
+            
+            for branch in "${branches[@]}"; do
+                echo -e "${CYAN}    删除分支: ${branch}${NC}"
+                if (cd "$repo_path" && git branch -D "$branch" 2>&1); then
+                    echo -e "${BOLD_GREEN}      ${CHECK_MARK} 删除成功${NC}"
+                    ((deleted_count++))
+                else
+                    echo -e "${BOLD_RED}      ${CROSS_MARK} 删除失败${NC}"
+                    ((failed_count++))
+                fi
+            done
+            
+            echo ""
+            if [[ $deleted_count -gt 0 ]]; then
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 成功删除 ${deleted_count} 个分支${NC}"
+                ((success_count++))
+            fi
+            if [[ $failed_count -gt 0 ]]; then
+                echo -e "${BOLD_RED}  ${CROSS_MARK} 删除失败 ${failed_count} 个分支${NC}"
+            fi
+        else
+            # 默认删除最近没有使用的3个分支
+            if [[ $branch_count -lt 8 ]]; then
+                echo -e "${YELLOW}  ⏭  跳过: 分支数量 (${branch_count}) 小于 8，不执行删除${NC}"
+                echo -e "${CYAN}    提示: 使用 -a 参数可以删除所有分支（除了当前分支和 main/master）${NC}"
+                echo ""
+                ((skipped_count++))
+                continue
+            fi
+            
+            # 获取每个分支的最后提交时间，按时间排序，取最旧的3个
+            local branches_with_date=()
+            for branch in "${branches[@]}"; do
+                local last_commit_date
+                last_commit_date=$(cd "$repo_path" && git log -1 --format="%ct" "$branch" 2>/dev/null || echo "0")
+                branches_with_date+=("${last_commit_date}|${branch}")
+            done
+            
+            # 按时间排序（升序，最旧的在前）
+            local sorted_branches_str
+            sorted_branches_str=$(printf '%s\n' "${branches_with_date[@]}" | sort -t'|' -k1 -n)
+            local sorted_branches
+            IFS=$'\n' read -ra sorted_branches <<< "$sorted_branches_str"
+            
+            # 取最旧的3个分支
+            local branches_to_delete=()
+            local count=0
+            for branch_info in "${sorted_branches[@]}"; do
+                if [[ $count -ge 3 ]]; then
+                    break
+                fi
+                local branch_name=$(echo "$branch_info" | cut -d'|' -f2)
+                branches_to_delete+=("$branch_name")
+                ((count++))
+            done
+            
+            echo -e "${CYAN}  当前分支: ${current_branch}${NC}"
+            echo -e "${CYAN}  分支总数: ${branch_count}${NC}"
+            echo -e "${CYAN}  将删除最旧的 3 个分支:${NC}"
+            for branch in "${branches_to_delete[@]}"; do
+                local last_commit_date
+                last_commit_date=$(cd "$repo_path" && git log -1 --format="%ci" "$branch" 2>/dev/null || echo "未知")
+                echo -e "${CYAN}    - ${branch} (最后提交: ${last_commit_date})${NC}"
+            done
+            echo ""
+            
+            local deleted_count=0
+            local failed_count=0
+            
+            for branch in "${branches_to_delete[@]}"; do
+                echo -e "${CYAN}    删除分支: ${branch}${NC}"
+                if (cd "$repo_path" && git branch -D "$branch" 2>&1); then
+                    echo -e "${BOLD_GREEN}      ${CHECK_MARK} 删除成功${NC}"
+                    ((deleted_count++))
+                else
+                    echo -e "${BOLD_RED}      ${CROSS_MARK} 删除失败${NC}"
+                    ((failed_count++))
+                fi
+            done
+            
+            echo ""
+            if [[ $deleted_count -gt 0 ]]; then
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 成功删除 ${deleted_count} 个分支${NC}"
+                ((success_count++))
+            fi
+            if [[ $failed_count -gt 0 ]]; then
+                echo -e "${BOLD_RED}  ${CROSS_MARK} 删除失败 ${failed_count} 个分支${NC}"
+            fi
+        fi
+        echo ""
+    done
+    
+    # 汇总结果
+    echo -e "${BLUE}========================================${NC}"
+    if [[ $success_count -gt 0 ]]; then
+        echo -e "${GREEN}${CHECK_MARK} 成功处理 ${success_count} 个仓库${NC}"
+    fi
+    if [[ $skipped_count -gt 0 ]]; then
+        echo -e "${YELLOW}⏭  跳过 ${skipped_count} 个仓库${NC}"
+    fi
+    echo -e "${BLUE}========================================${NC}"
+    
     return 0
 }
 
@@ -785,9 +1180,13 @@ Git 命令示例:
 
 工具命令:
   mt list                      列出所有配置的仓库
-  mt init                      生成默认配置文件
+  mt init                      手动初始化配置文件（可选，工具会自动处理）
   mt config                     编辑配置文件
   mt set-github-token <token>  设置 GitHub token（用于创建 PR）
+  mt delete [-a|--all]         删除本地分支
+                                  默认: 删除最近没有使用的3个分支（分支数需>=8）
+                                  -a: 删除所有分支（除了当前分支和 main/master）
+  mt clean                      清除 Flutter、Android 和 iOS 的缓存
   mt upgrade                    更新 mt 工具到最新版本
   mt help                      显示帮助信息
   mt --version                 显示版本号
@@ -812,6 +1211,17 @@ PR 命令:
       -c, --c, --channel <name> CN 版本指定渠道（official/huawei/xiaomi/oppo/vivo/honor/yingyongbao）
       -a, --a, --all            CN 版本构建所有渠道（仅 release）
   
+  mt install [cn|global] [options]
+    构建并安装 Android 包到设备（参数与 build 命令相同）
+    选项: 与 build 命令相同
+    注意: 需要设备已通过 USB 连接并启用 USB 调试
+    说明: install 命令不会执行 clean，直接构建以加快速度
+  
+  mt go [cn|global] [options]
+    执行 prebuild + install（快速开发流程）
+    选项: 与 build 命令相同
+    说明: 先执行 prebuild 构建 Flutter 模块，然后构建并安装到设备
+  
   mt build:check [-d|-r]
     编译检查：同时构建 CN 和 Global 版本（用于 push 前检查，默认 debug）
   
@@ -831,6 +1241,13 @@ PR 命令:
   mt build cn -a -r                        # CN 所有渠道 release
   mt build global                          # Global debug
   mt build global -r                       # Global release
+  mt install cn                            # 构建并安装 CN debug 包
+  mt install cn -r                        # 构建并安装 CN release 包
+  mt install global                        # 构建并安装 Global debug 包
+  mt install global -r                    # 构建并安装 Global release 包
+  mt go                                    # 执行 prebuild + install（Global debug）
+  mt go cn                                 # 执行 prebuild + install（CN debug）
+  mt go cn -r                              # 执行 prebuild + install（CN release）
   mt build:check -r                        # 同时构建 CN 和 Global release
   mt build:ios                             # iOS Global debug（默认）
   mt build:ios -r                          # iOS Global release
@@ -861,16 +1278,17 @@ _build_android_internal() {
     local build_type="$2"
     local channel="$3"
     local build_all_channels="$4"
+    local skip_clean="${5:-false}"  # 第5个参数：是否跳过 clean
     
     # 验证市场参数
     if [[ "$market" != "cn" ]] && [[ "$market" != "global" ]]; then
-        echo -e "${RED}错误: 市场参数必须是 cn 或 global${NC}"
+        echo -e "${BOLD_RED}错误: 市场参数必须是 cn 或 global${NC}"
         return 1
     fi
     
     # 验证构建类型
     if [[ "$build_type" != "debug" ]] && [[ "$build_type" != "release" ]] && [[ "$build_type" != "profile" ]]; then
-        echo -e "${RED}错误: 构建类型必须是 debug、release 或 profile${NC}"
+        echo -e "${BOLD_RED}错误: 构建类型必须是 debug、release 或 profile${NC}"
         return 1
     fi
     
@@ -886,7 +1304,7 @@ _build_android_internal() {
                 fi
             done
             if [[ "$valid" == false ]]; then
-                echo -e "${RED}错误: 无效的渠道 '$channel'${NC}"
+                echo -e "${BOLD_RED}错误: 无效的渠道 '$channel'${NC}"
                 echo -e "${YELLOW}支持的渠道: ${valid_channels[*]}${NC}"
                 return 1
             fi
@@ -895,7 +1313,7 @@ _build_android_internal() {
     
     # Global 版本不支持渠道
     if [[ "$market" == "global" ]] && ([[ -n "$channel" ]] || [[ "$build_all_channels" == "true" ]]); then
-        echo -e "${YELLOW}警告: Global 版本不支持渠道参数，已忽略${NC}"
+        echo -e "${BOLD_YELLOW}警告: Global 版本不支持渠道参数，已忽略${NC}"
         channel=""
         build_all_channels="false"
     fi
@@ -903,7 +1321,7 @@ _build_android_internal() {
     # 执行构建
     local android_dir="${PROJECT_ROOT}/plaud-android"
     if [[ ! -d "$android_dir" ]]; then
-        echo -e "${RED}错误: Android 项目目录不存在: $android_dir${NC}"
+        echo -e "${BOLD_RED}错误: Android 项目目录不存在: $android_dir${NC}"
         return 1
     fi
     
@@ -927,7 +1345,7 @@ _build_android_internal() {
     echo -e "${BLUE}[1/3] 切换 Flavor...${NC}"
     local switch_script="${android_dir}/switch_flavor.sh"
     if [[ ! -f "$switch_script" ]]; then
-        echo -e "${RED}错误: switch_flavor.sh 不存在${NC}"
+        echo -e "${BOLD_RED}错误: switch_flavor.sh 不存在${NC}"
         return 1
     fi
     
@@ -935,7 +1353,7 @@ _build_android_internal() {
     print_command "$android_dir" bash "$switch_script" "$market"
     
     (cd "$android_dir" && bash "$switch_script" "$market" 2>&1) || {
-        echo -e "${RED}错误: 切换 Flavor 失败${NC}"
+        echo -e "${BOLD_RED}错误: 切换 Flavor 失败${NC}"
         return 1
     }
     echo -e "${GREEN}${CHECK_MARK} Flavor 已切换为 ${market}${NC}"
@@ -957,7 +1375,7 @@ _build_android_internal() {
             if [[ "$build_type" == "release" ]]; then
                 gradle_task="assembleCnAllRelease"
             else
-                echo -e "${RED}错误: --all 选项目前只支持 release 构建${NC}"
+                echo -e "${BOLD_RED}错误: --all 选项目前只支持 release 构建${NC}"
                 return 1
             fi
         elif [[ -n "$channel" ]]; then
@@ -976,21 +1394,30 @@ _build_android_internal() {
         gradle_task="assembleGlobal${build_type_capitalized}"
     fi
     
-    echo -e "${CYAN}执行任务: ./gradlew clean ${gradle_task}${NC}"
-    
-    # 打印执行的命令
-    print_command "$android_dir" ./gradlew clean "$gradle_task" --stacktrace
-    
-    (cd "$android_dir" && ./gradlew clean "$gradle_task" --stacktrace 2>&1) || {
-        echo -e "${RED}${CROSS_MARK} Gradle 构建失败${NC}"
-        return 1
-    }
+    # 根据 skip_clean 参数决定是否执行 clean
+    if [[ "$skip_clean" == "true" ]]; then
+        echo -e "${CYAN}执行任务: ./gradlew ${gradle_task}${NC}"
+        # 打印执行的命令
+        print_command "$android_dir" ./gradlew "$gradle_task" --stacktrace
+        (cd "$android_dir" && ./gradlew "$gradle_task" --stacktrace 2>&1) || {
+            echo -e "${BOLD_RED}${CROSS_MARK} Gradle 构建失败${NC}"
+            return 1
+        }
+    else
+        echo -e "${CYAN}执行任务: ./gradlew clean ${gradle_task}${NC}"
+        # 打印执行的命令
+        print_command "$android_dir" ./gradlew clean "$gradle_task" --stacktrace
+        (cd "$android_dir" && ./gradlew clean "$gradle_task" --stacktrace 2>&1) || {
+            echo -e "${BOLD_RED}${CROSS_MARK} Gradle 构建失败${NC}"
+            return 1
+        }
+    fi
     echo ""
     
     # 显示构建结果
     echo -e "${BLUE}[3/3] 构建完成${NC}"
     echo ""
-    echo -e "${GREEN}${CHECK_MARK} 构建成功！${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} 构建成功！${NC}"
     
     # 查找 APK 文件
     local apk_dir="${android_dir}/app/build/outputs/apk"
@@ -1033,7 +1460,7 @@ build_android() {
                 ;;
             -c|--c|--channel)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${RED}错误: --channel 需要指定渠道名称${NC}"
+                    echo -e "${BOLD_RED}错误: --channel 需要指定渠道名称${NC}"
                     return 1
                 fi
                 channel="$2"
@@ -1044,14 +1471,14 @@ build_android() {
                 shift
                 ;;
             *)
-                echo -e "${RED}错误: 未知参数: $1${NC}"
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
                 return 1
                 ;;
         esac
     done
     
-    # 调用内部实现
-    _build_android_internal "$market" "$build_type" "$channel" "$build_all_channels"
+    # 调用内部实现（build 命令默认不执行 clean，直接构建）
+    _build_android_internal "$market" "$build_type" "$channel" "$build_all_channels" "true"
     local exit_code=$?
     
     # 如果失败且是直接调用（非 build_check），则退出
@@ -1062,12 +1489,420 @@ build_android() {
     return $exit_code
 }
 
+# 安装 Android 应用（内部实现）
+_install_android_internal() {
+    local market="$1"
+    local build_type="$2"
+    local channel="$3"
+    local build_all_channels="$4"
+    
+    # 先执行构建（install 命令不执行 clean）
+    _build_android_internal "$market" "$build_type" "$channel" "$build_all_channels" "true"
+    local build_exit_code=$?
+    
+    if [[ $build_exit_code -ne 0 ]]; then
+        echo -e "${BOLD_RED}构建失败，无法安装${NC}"
+        return $build_exit_code
+    fi
+    
+    # 检查 adb 是否可用
+    if ! command -v adb &> /dev/null; then
+        echo -e "${BOLD_RED}错误: adb 命令不可用，请确保已安装 Android SDK Platform Tools${NC}"
+        echo -e "${YELLOW}安装方法: brew install android-platform-tools${NC}"
+        return 1
+    fi
+    
+    # 检查设备连接
+    local devices
+    devices=$(adb devices 2>/dev/null | grep -v "List of devices" | grep "device$" | wc -l | tr -d ' ')
+    if [[ "$devices" -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 未检测到已连接的 Android 设备${NC}"
+        echo -e "${YELLOW}请确保:${NC}"
+        echo -e "${CYAN}  1. 设备已通过 USB 连接${NC}"
+        echo -e "${CYAN}  2. 已启用 USB 调试${NC}"
+        echo -e "${CYAN}  3. 已授权此计算机进行 USB 调试${NC}"
+        return 1
+    fi
+    
+    # 查找 APK 文件
+    local android_dir="${PROJECT_ROOT}/plaud-android"
+    local apk_dir="${android_dir}/app/build/outputs/apk"
+    local apk_files=()
+    
+    if [[ ! -d "$apk_dir" ]]; then
+        echo -e "${BOLD_RED}错误: APK 目录不存在: $apk_dir${NC}"
+        return 1
+    fi
+    
+    # 根据构建参数查找对应的 APK
+    if [[ "$market" == "cn" ]]; then
+        if [[ "$build_all_channels" == "true" ]]; then
+            # 所有渠道，查找所有 CN release APK（按修改时间排序，取最新的）
+            while IFS= read -r apk; do
+                apk_files+=("$apk")
+            done < <(find "$apk_dir" -name "*.apk" -type f -path "*/cn/*" 2>/dev/null | sort -r | head -10)
+        elif [[ -n "$channel" ]]; then
+            # 指定渠道
+            local channel_capitalized="$(echo "${channel:0:1}" | tr '[:lower:]' '[:upper:]')${channel:1}"
+            local build_type_capitalized="$(echo "${build_type:0:1}" | tr '[:lower:]' '[:upper:]')${build_type:1}"
+            # 查找匹配的 APK 文件
+            while IFS= read -r apk; do
+                local apk_name=$(basename "$apk")
+                if [[ "$apk_name" =~ ${channel_capitalized} ]] || [[ "$apk_name" =~ ${channel} ]]; then
+                    if [[ "$apk_name" =~ ${build_type_capitalized} ]] || [[ "$apk_name" =~ ${build_type} ]]; then
+                        apk_files+=("$apk")
+                    fi
+                fi
+            done < <(find "$apk_dir" -name "*.apk" -type f 2>/dev/null)
+        else
+            # 默认官方渠道
+            local build_type_capitalized="$(echo "${build_type:0:1}" | tr '[:lower:]' '[:upper:]')${build_type:1}"
+            while IFS= read -r apk; do
+                local apk_name=$(basename "$apk")
+                if [[ "$apk_name" =~ Official ]] || [[ "$apk_name" =~ official ]]; then
+                    if [[ "$apk_name" =~ ${build_type_capitalized} ]] || [[ "$apk_name" =~ ${build_type} ]]; then
+                        apk_files+=("$apk")
+                    fi
+                fi
+            done < <(find "$apk_dir" -name "*.apk" -type f 2>/dev/null)
+        fi
+    else
+        # Global
+        local build_type_capitalized="$(echo "${build_type:0:1}" | tr '[:lower:]' '[:upper:]')${build_type:1}"
+        while IFS= read -r apk; do
+            local apk_name=$(basename "$apk")
+            if [[ "$apk_name" =~ Global ]] || [[ "$apk_name" =~ global ]]; then
+                if [[ "$apk_name" =~ ${build_type_capitalized} ]] || [[ "$apk_name" =~ ${build_type} ]]; then
+                    apk_files+=("$apk")
+                fi
+            fi
+        done < <(find "$apk_dir" -name "*.apk" -type f 2>/dev/null)
+    fi
+    
+    # 如果没找到，尝试查找最新生成的 APK（按修改时间排序）
+    if [[ ${#apk_files[@]} -eq 0 ]]; then
+        echo -e "${BOLD_YELLOW}警告: 未找到精确匹配的 APK，尝试查找最新生成的 APK...${NC}"
+        # 查找最近 5 分钟内修改的 APK 文件
+        while IFS= read -r apk; do
+            apk_files+=("$apk")
+        done < <(find "$apk_dir" -name "*.apk" -type f -mmin -5 2>/dev/null | sort -r | head -5)
+    fi
+    
+    if [[ ${#apk_files[@]} -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 未找到对应的 APK 文件${NC}"
+        echo -e "${YELLOW}请检查构建是否成功完成${NC}"
+        echo -e "${CYAN}APK 目录: ${apk_dir}${NC}"
+        return 1
+    fi
+    
+    # 安装 APK
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  开始安装到设备${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    local install_success=0
+    local install_failed=0
+    
+    for apk_file in "${apk_files[@]}"; do
+        echo -e "${CYAN}安装: $(basename "$apk_file")${NC}"
+        echo -e "${CYAN}路径: ${apk_file}${NC}"
+        
+        # 使用 adb install -r 安装（-r 表示替换已存在的应用）
+        # 捕获输出和退出码
+        local install_output
+        local install_exit_code
+        install_output=$(adb install -r "$apk_file" 2>&1)
+        install_exit_code=$?
+        
+        # 显示安装输出
+        if [[ -n "$install_output" ]]; then
+            echo -e "${GRAY}${install_output}${NC}"
+        fi
+        
+        # 检查安装结果
+        if [[ $install_exit_code -eq 0 ]]; then
+            # 检查输出中是否包含 "Success" 或 "success"（adb install 成功时会输出）
+            if echo "$install_output" | grep -qi "success\|Success"; then
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 安装成功${NC}"
+                ((install_success++))
+            else
+                # 即使退出码是 0，但输出中没有 success，可能是警告
+                echo -e "${BOLD_YELLOW}  ⚠  安装完成（可能有警告）${NC}"
+                ((install_success++))
+            fi
+        else
+            echo -e "${BOLD_RED}  ${CROSS_MARK} 安装失败${NC}"
+            ((install_failed++))
+        fi
+        echo ""
+    done
+    
+    # 汇总结果
+    echo -e "${BLUE}========================================${NC}"
+    if [[ $install_success -gt 0 ]]; then
+        echo -e "${GREEN}${CHECK_MARK} 成功安装 ${install_success} 个 APK${NC}"
+    fi
+    if [[ $install_failed -gt 0 ]]; then
+        echo -e "${BOLD_RED}${CROSS_MARK} 安装失败 ${install_failed} 个 APK${NC}"
+        return 1
+    fi
+    echo -e "${BLUE}========================================${NC}"
+    
+    return 0
+}
+
+# 安装 Android 应用（公开接口）
+install_android() {
+    local market="$1"
+    shift
+    local build_type="debug"  # 默认构建 debug
+    local channel=""
+    local build_all_channels=false
+    
+    # 解析参数
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--d|--debug)
+                build_type="debug"
+                shift
+                ;;
+            -r|--r|--release)
+                build_type="release"
+                shift
+                ;;
+            -p|--p|--profile)
+                build_type="profile"
+                shift
+                ;;
+            -c|--c|--channel)
+                if [[ -z "${2:-}" ]]; then
+                    echo -e "${BOLD_RED}错误: --channel 需要指定渠道名称${NC}"
+                    return 1
+                fi
+                channel="$2"
+                shift 2
+                ;;
+            -a|--a|--all)
+                build_all_channels=true
+                shift
+                ;;
+            *)
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                return 1
+                ;;
+        esac
+    done
+    
+    # 调用内部实现
+    _install_android_internal "$market" "$build_type" "$channel" "$build_all_channels"
+    local exit_code=$?
+    
+    if [[ $exit_code -ne 0 ]]; then
+        exit $exit_code
+    fi
+    
+    return $exit_code
+}
+
+# 清除缓存函数
+clean_cache() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  清除缓存${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    local cleaned_count=0
+    local failed_count=0
+    
+    # 清除 Flutter 缓存
+    echo -e "${CYAN}[1/3] 清除 Flutter 缓存...${NC}"
+    local flutter_dirs=(
+        "${PROJECT_ROOT}/plaud-flutter-cn/.dart_tool"
+        "${PROJECT_ROOT}/plaud-flutter-cn/.flutter-plugins"
+        "${PROJECT_ROOT}/plaud-flutter-cn/.flutter-plugins-dependencies"
+        "${PROJECT_ROOT}/plaud-flutter-cn/build"
+        "${PROJECT_ROOT}/plaud-flutter-global/.dart_tool"
+        "${PROJECT_ROOT}/plaud-flutter-global/.flutter-plugins"
+        "${PROJECT_ROOT}/plaud-flutter-global/.flutter-plugins-dependencies"
+        "${PROJECT_ROOT}/plaud-flutter-global/build"
+        "${PROJECT_ROOT}/plaud-flutter-common/.dart_tool"
+        "${PROJECT_ROOT}/plaud-flutter-common/.flutter-plugins"
+        "${PROJECT_ROOT}/plaud-flutter-common/.flutter-plugins-dependencies"
+        "${PROJECT_ROOT}/plaud-flutter-common/build"
+    )
+    
+    for dir in "${flutter_dirs[@]}"; do
+        if [[ -d "$dir" ]] || [[ -f "$dir" ]]; then
+            echo -e "${CYAN}  删除: ${dir}${NC}"
+            if rm -rf "$dir" 2>/dev/null; then
+                ((cleaned_count++))
+            else
+                echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                ((failed_count++))
+            fi
+        fi
+    done
+    
+    # 清除 Android 缓存
+    echo ""
+    echo -e "${CYAN}[2/3] 清除 Android 缓存...${NC}"
+    local android_dir="${PROJECT_ROOT}/plaud-android"
+    if [[ -d "$android_dir" ]]; then
+        local android_dirs=(
+            "${android_dir}/.gradle"
+            "${android_dir}/app/build"
+            "${android_dir}/build"
+        )
+        
+        for dir in "${android_dirs[@]}"; do
+            if [[ -d "$dir" ]]; then
+                echo -e "${CYAN}  删除: ${dir}${NC}"
+                if rm -rf "$dir" 2>/dev/null; then
+                    ((cleaned_count++))
+                else
+                    echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                    ((failed_count++))
+                fi
+            fi
+        done
+    else
+        echo -e "${YELLOW}  跳过: Android 目录不存在${NC}"
+    fi
+    
+    # 清除 iOS 缓存
+    echo ""
+    echo -e "${CYAN}[3/3] 清除 iOS 缓存...${NC}"
+    local ios_dir="${PROJECT_ROOT}/plaud-ios"
+    if [[ -d "$ios_dir" ]]; then
+        local ios_dirs=(
+            "${ios_dir}/PLAUD/build"
+            "${ios_dir}/Pods"
+            "${ios_dir}/DerivedData"
+        )
+        
+        for dir in "${ios_dirs[@]}"; do
+            if [[ -d "$dir" ]]; then
+                echo -e "${CYAN}  删除: ${dir}${NC}"
+                if rm -rf "$dir" 2>/dev/null; then
+                    ((cleaned_count++))
+                else
+                    echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                    ((failed_count++))
+                fi
+            fi
+        done
+        
+        # 清除 Xcode DerivedData（如果存在）
+        local xcode_derived_data="${HOME}/Library/Developer/Xcode/DerivedData"
+        if [[ -d "$xcode_derived_data" ]]; then
+            echo -e "${CYAN}  清除 Xcode DerivedData...${NC}"
+            # 只清除与项目相关的 DerivedData（可选，因为可能影响其他项目）
+            # 这里我们只提示，不自动删除整个 DerivedData
+            echo -e "${YELLOW}  提示: Xcode DerivedData 位于 ${xcode_derived_data}${NC}"
+            echo -e "${YELLOW}  如需清除，请手动删除或使用 Xcode 的 Product > Clean Build Folder${NC}"
+        fi
+    else
+        echo -e "${YELLOW}  跳过: iOS 目录不存在${NC}"
+    fi
+    
+    # 汇总结果
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    if [[ $cleaned_count -gt 0 ]]; then
+        echo -e "${GREEN}${CHECK_MARK} 成功清除 ${cleaned_count} 个缓存目录${NC}"
+    fi
+    if [[ $failed_count -gt 0 ]]; then
+        echo -e "${YELLOW}${CROSS_MARK} 清除失败 ${failed_count} 个目录${NC}"
+    fi
+    if [[ $cleaned_count -eq 0 ]] && [[ $failed_count -eq 0 ]]; then
+        echo -e "${YELLOW}没有找到需要清除的缓存${NC}"
+    fi
+    echo -e "${BLUE}========================================${NC}"
+    
+    return 0
+}
+
+# go 命令：执行 prebuild + install
+go_android() {
+    local market="$1"
+    shift
+    local build_type="debug"  # 默认构建 debug
+    local channel=""
+    local build_all_channels=false
+    
+    # 解析参数（与 install 命令相同）
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--d|--debug)
+                build_type="debug"
+                shift
+                ;;
+            -r|--r|--release)
+                build_type="release"
+                shift
+                ;;
+            -p|--p|--profile)
+                build_type="profile"
+                shift
+                ;;
+            -c|--c|--channel)
+                if [[ -z "${2:-}" ]]; then
+                    echo -e "${BOLD_RED}错误: --channel 需要指定渠道名称${NC}"
+                    return 1
+                fi
+                channel="$2"
+                shift 2
+                ;;
+            -a|--a|--all)
+                build_all_channels=true
+                shift
+                ;;
+            *)
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                return 1
+                ;;
+        esac
+    done
+    
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  执行 go 命令（prebuild + install）${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 第一步：执行 prebuild
+    echo -e "${CYAN}[1/2] 执行 prebuild...${NC}"
+    echo ""
+    if ! prebuild; then
+        echo -e "${BOLD_RED}错误: prebuild 失败，无法继续${NC}"
+        return 1
+    fi
+    echo ""
+    
+    # 第二步：执行 install
+    echo -e "${CYAN}[2/2] 执行 install...${NC}"
+    echo ""
+    _install_android_internal "$market" "$build_type" "$channel" "$build_all_channels"
+    local exit_code=$?
+    
+    if [[ $exit_code -ne 0 ]]; then
+        return $exit_code
+    fi
+    
+    echo ""
+    echo -e "${BOLD_GREEN}${CHECK_MARK} go 命令执行完成！${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    
+    return 0
+}
+
 # 预构建：构建 Flutter 模块
 prebuild() {
     local build_all_script="${PROJECT_ROOT}/build_all.sh"
     
     if [[ ! -f "$build_all_script" ]]; then
-        echo -e "${RED}错误: build_all.sh 不存在: ${build_all_script}${NC}"
+        echo -e "${BOLD_RED}错误: build_all.sh 不存在: ${build_all_script}${NC}"
         return 1
     fi
     
@@ -1082,12 +1917,12 @@ prebuild() {
     print_command "$PROJECT_ROOT" bash "$build_all_script"
     
     (cd "$PROJECT_ROOT" && bash "$build_all_script" 2>&1) || {
-        echo -e "${RED}${CROSS_MARK} Flutter 模块构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} Flutter 模块构建失败${NC}"
         return 1
     }
     
     echo ""
-    echo -e "${GREEN}${CHECK_MARK} Flutter 模块构建成功！${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} Flutter 模块构建成功！${NC}"
     echo -e "${BLUE}========================================${NC}"
     return 0
 }
@@ -1112,7 +1947,7 @@ build_check() {
                 shift
                 ;;
             *)
-                echo -e "${RED}错误: 未知参数: $1${NC}"
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
                 exit 1
                 ;;
         esac
@@ -1134,15 +1969,15 @@ build_check() {
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     # 临时禁用 set -e，以便捕获错误
     set +e
-    _build_android_internal cn "$build_type" "" "false" 2>&1
+    _build_android_internal cn "$build_type" "" "false" "true" 2>&1
     local cn_exit_code=$?
     set -e
     
     if [[ $cn_exit_code -eq 0 ]]; then
-        echo -e "${GREEN}${CHECK_MARK} CN 构建成功${NC}"
+        echo -e "${BOLD_GREEN}${CHECK_MARK} CN 构建成功${NC}"
         cn_success=true
     else
-        echo -e "${RED}${CROSS_MARK} CN 构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} CN 构建失败${NC}"
         success=false
     fi
     echo ""
@@ -1153,15 +1988,15 @@ build_check() {
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     # 临时禁用 set -e，以便捕获错误
     set +e
-    _build_android_internal global "$build_type" "" "false" 2>&1
+    _build_android_internal global "$build_type" "" "false" "true" 2>&1
     local global_exit_code=$?
     set -e
     
     if [[ $global_exit_code -eq 0 ]]; then
-        echo -e "${GREEN}${CHECK_MARK} Global 构建成功${NC}"
+        echo -e "${BOLD_GREEN}${CHECK_MARK} Global 构建成功${NC}"
         global_success=true
     else
-        echo -e "${RED}${CROSS_MARK} Global 构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} Global 构建失败${NC}"
         success=false
     fi
     echo ""
@@ -1192,20 +2027,20 @@ _build_ios_internal() {
     
     # 验证市场参数
     if [[ "$market" != "cn" ]] && [[ "$market" != "global" ]]; then
-        echo -e "${RED}错误: 市场参数必须是 cn 或 global${NC}"
+        echo -e "${BOLD_RED}错误: 市场参数必须是 cn 或 global${NC}"
         return 1
     fi
     
     # 验证构建类型
     if [[ "$build_type" != "debug" ]] && [[ "$build_type" != "release" ]]; then
-        echo -e "${RED}错误: 构建类型必须是 debug 或 release${NC}"
+        echo -e "${BOLD_RED}错误: 构建类型必须是 debug 或 release${NC}"
         return 1
     fi
     
     # 执行构建
     local ios_dir="${PROJECT_ROOT}/plaud-ios"
     if [[ ! -d "$ios_dir" ]]; then
-        echo -e "${RED}错误: iOS 项目目录不存在: $ios_dir${NC}"
+        echo -e "${BOLD_RED}错误: iOS 项目目录不存在: $ios_dir${NC}"
         return 1
     fi
     
@@ -1236,14 +2071,14 @@ _build_ios_internal() {
     
     # 检查 xcodebuild 是否可用
     if ! command -v xcodebuild &> /dev/null; then
-        echo -e "${RED}错误: xcodebuild 命令不可用，请确保已安装 Xcode${NC}"
+        echo -e "${BOLD_RED}错误: xcodebuild 命令不可用，请确保已安装 Xcode${NC}"
         return 1
     fi
     
     # 检查 workspace 是否存在
     local workspace="${ios_dir}/PLAUD/PLAUD.xcworkspace"
     if [[ ! -d "$workspace" ]]; then
-        echo -e "${RED}错误: Xcode workspace 不存在: $workspace${NC}"
+        echo -e "${BOLD_RED}错误: Xcode workspace 不存在: $workspace${NC}"
         return 1
     fi
     
@@ -1254,18 +2089,18 @@ _build_ios_internal() {
     echo -e "${CYAN}FLUTTER_MODULE: ${FLUTTER_MODULE}${NC}"
     echo ""
     
-    # 打印执行的命令
-    print_command "$ios_dir" xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration "$configuration" clean build
+    # 打印执行的命令（默认不执行 clean，直接 build）
+    print_command "$ios_dir" xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration "$configuration" build
     
     (cd "$ios_dir" && xcodebuild \
         -workspace "$workspace" \
         -scheme "$scheme" \
         -configuration "$configuration" \
         -sdk iphoneos \
-        clean build \
+        build \
         FLUTTER_MODULE="$market" \
         2>&1) || {
-        echo -e "${RED}${CROSS_MARK} iOS 构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} iOS 构建失败${NC}"
         return 1
     }
     
@@ -1274,7 +2109,7 @@ _build_ios_internal() {
     # 显示构建结果
     echo -e "${BLUE}[2/2] 构建完成${NC}"
     echo ""
-    echo -e "${GREEN}${CHECK_MARK} iOS 构建成功！${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} iOS 构建成功！${NC}"
     
     # 查找 IPA 或 app 文件
     local build_dir="${ios_dir}/PLAUD/build"
@@ -1313,7 +2148,7 @@ build_ios() {
                 shift
                 ;;
             *)
-                echo -e "${RED}错误: 未知参数: $1${NC}"
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
                 echo -e "${YELLOW}用法: mt build:ios [cn|global] [-d|-r]${NC}"
                 return 1
                 ;;
@@ -1390,6 +2225,50 @@ get_repo_info() {
     else
         return 1
     fi
+}
+
+# 获取已存在的 PR URL（仅检查 open 状态）
+# 参数: repo_full_name(org/repo), source_branch, target_branch, github_token
+get_existing_pr_url() {
+    local repo_full_name="$1"
+    local source_branch="$2"
+    local target_branch="$3"
+    local github_token="$4"
+    
+    if [[ -z "$repo_full_name" ]] || [[ -z "$source_branch" ]] || [[ -z "$target_branch" ]] || [[ -z "$github_token" ]]; then
+        return 1
+    fi
+    
+    local api_url="https://api.github.com/repos/${repo_full_name}/pulls"
+    
+    # GitHub pulls API 的 head 参数格式为 "owner:branch"
+    # 注意：branch 名称可能包含 "/"（例如 feature/xxx），不能误判为 owner/branch
+    local repo_owner="${repo_full_name%%/*}"
+    local head_param=""
+    if [[ "$source_branch" == *":"* ]]; then
+        head_param="$source_branch"
+    else
+        head_param="${repo_owner}:${source_branch}"
+    fi
+    
+    # 只查 open PR：若不存在 open PR，则视为“没有 PR”，允许创建新 PR
+    local prs
+    prs=$(curl -s -G "$api_url" \
+        --data-urlencode "head=${head_param}" \
+        --data-urlencode "base=${target_branch}" \
+        --data-urlencode "state=open" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Authorization: token ${github_token}" 2>/dev/null)
+    
+    local pr_url
+    pr_url=$(echo "$prs" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+    
+    if [[ -n "$pr_url" ]]; then
+        echo "$pr_url"
+        return 0
+    fi
+    
+    return 1
 }
 
 # 获取当前分支
@@ -1473,7 +2352,7 @@ create_github_pr() {
     local repo_full_name
     repo_full_name=$(get_repo_info "$repo_path")
     if [[ -z "$repo_full_name" ]]; then
-        echo -e "${RED}错误: 无法获取仓库信息: ${path}${NC}"
+        echo -e "${BOLD_RED}错误: 无法获取仓库信息: ${path}${NC}"
         return 1
     fi
     
@@ -1484,16 +2363,24 @@ create_github_pr() {
     local branch_exists
     branch_exists=$(cd "$repo_path" && git ls-remote --heads origin "$source_branch" 2>/dev/null | grep -q "$source_branch" && echo "yes" || echo "no")
     if [[ "$branch_exists" == "no" ]]; then
-        echo -e "${YELLOW}警告: 分支 ${source_branch} 不存在于远程${NC}" >&2
+        echo -e "${BOLD_YELLOW}警告: 分支 ${source_branch} 不存在于远程${NC}" >&2
         echo -e "${YELLOW}请先推送分支: git push origin ${source_branch}${NC}" >&2
         return 1
+    fi
+    
+    # 若 PR 已存在（open），直接返回 URL
+    local existing_pr_url
+    existing_pr_url=$(get_existing_pr_url "$repo_full_name" "$source_branch" "$target_branch" "$github_token" 2>/dev/null || echo "")
+    if [[ -n "$existing_pr_url" ]]; then
+        echo "$existing_pr_url"
+        return 0
     fi
     
     # 检查分支和目标分支是否有共同历史（使用远程分支）
     local common_base
     common_base=$(cd "$repo_path" && git merge-base "origin/${target_branch}" "origin/${source_branch}" 2>/dev/null || echo "")
     if [[ -z "$common_base" ]]; then
-        echo -e "${YELLOW}警告: 分支 ${source_branch} 和 ${target_branch} 没有共同历史${NC}" >&2
+        echo -e "${BOLD_YELLOW}警告: 分支 ${source_branch} 和 ${target_branch} 没有共同历史${NC}" >&2
         echo -e "${YELLOW}这可能是因为分支是从不同的提交创建的${NC}" >&2
         echo -e "${YELLOW}解决方案:${NC}" >&2
         echo -e "${CYAN}  1. 确保分支是从 ${target_branch} 创建的${NC}" >&2
@@ -1511,7 +2398,7 @@ create_github_pr() {
     local ahead
     ahead=$(cd "$repo_path" && git rev-list --count "${common_base}..origin/${source_branch}" 2>/dev/null || echo "0")
     if [[ "$ahead" -eq 0 ]]; then
-        echo -e "${YELLOW}警告: 分支 ${source_branch} 没有相对于 ${target_branch} 的新提交${NC}" >&2
+        echo -e "${BOLD_YELLOW}警告: 分支 ${source_branch} 没有相对于 ${target_branch} 的新提交${NC}" >&2
         return 1
     fi
     
@@ -1550,34 +2437,9 @@ EOF
     elif [[ "$http_code" == "422" ]]; then
         # 检查是否已存在 PR（多种错误消息格式）
         if echo "$body" | grep -q "already exists" || echo "$body" | grep -q "A pull request already exists"; then
-            # PR 已存在，快速查询一次
-            local existing_prs
+            # PR 已存在（open），查询并返回 URL
             local existing_pr_url=""
-            
-            # 处理 source_branch，转换为正确的 head 参数格式
-            local head_param=""
-            if [[ "$source_branch" =~ ^[^/]+/ ]]; then
-                # source_branch 是 owner/branch 格式，转换为 owner:branch
-                local owner="${source_branch%%/*}"
-                local branch="${source_branch#*/}"
-                head_param="${owner}:${branch}"
-            else
-                # source_branch 只是分支名
-                head_param="${repo_full_name}:${source_branch}"
-            fi
-            
-            # 快速查询一次（先 open，再 all）
-            existing_prs=$(curl -s -X GET "${api_url}?head=${head_param}&base=${target_branch}&state=open" \
-                -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${github_token}" 2>/dev/null)
-            existing_pr_url=$(echo "$existing_prs" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-            
-            if [[ -z "$existing_pr_url" ]]; then
-                existing_prs=$(curl -s -X GET "${api_url}?head=${head_param}&base=${target_branch}&state=all" \
-                    -H "Accept: application/vnd.github.v3+json" \
-                    -H "Authorization: token ${github_token}" 2>/dev/null)
-                existing_pr_url=$(echo "$existing_prs" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-            fi
+            existing_pr_url=$(get_existing_pr_url "$repo_full_name" "$source_branch" "$target_branch" "$github_token" 2>/dev/null || echo "")
             
             if [[ -n "$existing_pr_url" ]]; then
                 echo "$existing_pr_url"
@@ -1589,7 +2451,7 @@ EOF
             fi
         fi
         
-        echo -e "${RED}错误: 创建 PR 失败 (HTTP ${http_code})${NC}" >&2
+        echo -e "${BOLD_RED}错误: 创建 PR 失败 (HTTP ${http_code})${NC}" >&2
         IFS='|' read -r name path url <<< "$repo_info"
         echo -e "${RED}仓库: ${name}${NC}" >&2
         
@@ -1625,7 +2487,7 @@ EOF
         return 1
     else
         # 处理其他 HTTP 状态码
-        echo -e "${RED}错误: 创建 PR 失败 (HTTP ${http_code})${NC}" >&2
+        echo -e "${BOLD_RED}错误: 创建 PR 失败 (HTTP ${http_code})${NC}" >&2
         IFS='|' read -r name path url <<< "$repo_info"
         echo -e "${RED}仓库: ${name}${NC}" >&2
         
@@ -1743,7 +2605,7 @@ create_prs() {
     github_token=$(get_github_token 2>&1)
     local token_exit_code=$?
     if [[ $token_exit_code -ne 0 ]] || [[ -z "$github_token" ]]; then
-        echo -e "${RED}错误: 未找到 GitHub token${NC}" >&2
+        echo -e "${BOLD_RED}错误: 未找到 GitHub token${NC}" >&2
         echo -e "${YELLOW}请使用以下命令设置 GitHub token:${NC}" >&2
         echo -e "${CYAN}  mt set-github-token <your_token>${NC}" >&2
         echo -e "${YELLOW}Token 将保存到 github.token 文件（已添加到 .gitignore）${NC}" >&2
@@ -1758,7 +2620,7 @@ create_prs() {
     read -ra repos_array <<< "$(get_repositories)"
     
     if [[ ${#repos_array[@]} -eq 0 ]]; then
-        echo -e "${RED}错误: 未找到任何仓库配置${NC}"
+        echo -e "${BOLD_RED}错误: 未找到任何仓库配置${NC}"
         exit 1
     fi
     
@@ -1869,39 +2731,12 @@ create_prs() {
         fi
         local pr_description="${description:-}"
         
-        # 在创建 PR 前，先快速检查是否已存在 PR
+        # 在创建 PR 前，先快速检查是否已存在 open PR（存在则直接返回 URL）
         local repo_full_name
         repo_full_name=$(get_repo_info "$repo_path")
         local existing_pr_url=""
         if [[ -n "$repo_full_name" ]]; then
-            local api_url="https://api.github.com/repos/${repo_full_name}/pulls"
-            
-            # 处理分支名，转换为 GitHub API 需要的格式 (owner:branch)
-            local head_param=""
-            if [[ "$current_branch" =~ ^[^/]+/ ]]; then
-                # 已经是 owner/branch 格式，转换为 owner:branch
-                local owner="${current_branch%%/*}"
-                local branch="${current_branch#*/}"
-                head_param="${owner}:${branch}"
-            else
-                # 只是分支名，需要添加 owner（使用 repo_full_name，即主仓库）
-                head_param="${repo_full_name}:${current_branch}"
-            fi
-            
-            # 只查询一次（先 open，再 all），快速返回
-            local existing_prs
-            existing_prs=$(curl -s -X GET "${api_url}?head=${head_param}&base=${target_branch}&state=open" \
-                -H "Accept: application/vnd.github.v3+json" \
-                -H "Authorization: token ${github_token}" 2>/dev/null)
-            existing_pr_url=$(echo "$existing_prs" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-            
-            # 如果 open 状态没找到，快速尝试 all 状态
-            if [[ -z "$existing_pr_url" ]]; then
-                existing_prs=$(curl -s -X GET "${api_url}?head=${head_param}&base=${target_branch}&state=all" \
-                    -H "Accept: application/vnd.github.v3+json" \
-                    -H "Authorization: token ${github_token}" 2>/dev/null)
-                existing_pr_url=$(echo "$existing_prs" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-            fi
+            existing_pr_url=$(get_existing_pr_url "$repo_full_name" "$current_branch" "$target_branch" "$github_token" 2>/dev/null || echo "")
         fi
         
         # 如果已存在 PR，直接使用并跳过创建
@@ -1996,7 +2831,7 @@ create_prs() {
                     if update_pr_description "$repo_path" "$repo_info" "$pr_url" "$new_description" "$github_token"; then
                         echo -e "${GREEN}${CHECK_MARK} 已更新 ${repo_name} 的 PR 描述${NC}"
                     else
-                        echo -e "${YELLOW}警告: 更新 ${repo_name} 的 PR 描述失败${NC}"
+                        echo -e "${BOLD_YELLOW}警告: 更新 ${repo_name} 的 PR 描述失败${NC}"
                     fi
                     break
                 fi
@@ -2077,7 +2912,7 @@ main() {
             ;;
         set-github-token)
             if [[ -z "${2:-}" ]]; then
-                echo -e "${RED}错误: 请提供 GitHub token${NC}"
+                echo -e "${BOLD_RED}错误: 请提供 GitHub token${NC}"
                 echo -e "${YELLOW}用法: mt set-github-token <your_token>${NC}"
                 echo -e "${CYAN}获取 token: https://github.com/settings/tokens${NC}"
                 exit 1
@@ -2087,6 +2922,13 @@ main() {
             ;;
         upgrade)
             upgrade_mt
+            ;;
+        delete)
+            shift
+            delete_branches "$@"
+            ;;
+        clean)
+            clean_cache
             ;;
         prebuild)
             prebuild
@@ -2111,6 +2953,30 @@ main() {
             shift
             build_ios "$@"
             ;;
+        install)
+            # 如果没有指定市场，默认为 global
+            if [[ -z "${2:-}" ]] || [[ "${2}" =~ ^- ]]; then
+                # 没有指定市场，使用默认 global
+                shift
+                install_android "global" "$@"
+            else
+                # 指定了市场
+                shift
+                install_android "$@"
+            fi
+            ;;
+        go)
+            # 如果没有指定市场，默认为 global
+            if [[ -z "${2:-}" ]] || [[ "${2}" =~ ^- ]]; then
+                # 没有指定市场，使用默认 global
+                shift
+                go_android "global" "$@"
+            else
+                # 指定了市场
+                shift
+                go_android "$@"
+            fi
+            ;;
         pr)
             shift
             local target_branch="main"
@@ -2122,7 +2988,7 @@ main() {
                 case "$1" in
                     -b|--b|--base)
                         if [[ -z "${2:-}" ]]; then
-                            echo -e "${RED}错误: --base 需要指定目标分支${NC}"
+                            echo -e "${BOLD_RED}错误: --base 需要指定目标分支${NC}"
                             exit 1
                         fi
                         target_branch="$2"
@@ -2130,7 +2996,7 @@ main() {
                         ;;
                     -t|--t|--title)
                         if [[ -z "${2:-}" ]]; then
-                            echo -e "${RED}错误: --title 需要指定 PR 标题${NC}"
+                            echo -e "${BOLD_RED}错误: --title 需要指定 PR 标题${NC}"
                             exit 1
                         fi
                         title="$2"
@@ -2138,14 +3004,14 @@ main() {
                         ;;
                     -d|--d|--description)
                         if [[ -z "${2:-}" ]]; then
-                            echo -e "${RED}错误: --description 需要指定 PR 描述${NC}"
+                            echo -e "${BOLD_RED}错误: --description 需要指定 PR 描述${NC}"
                             exit 1
                         fi
                         description="$2"
                         shift 2
                         ;;
                     *)
-                        echo -e "${RED}错误: 未知参数: $1${NC}"
+                        echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
                         echo -e "${YELLOW}用法: mt pr [-b <branch>] [-t <title>] [-d <description>]${NC}"
                         exit 1
                         ;;
@@ -2166,8 +3032,42 @@ main() {
             show_help
             ;;
         *)
-            # 执行 Git 命令
-            run_command "$@"
+            # 检查是否是支持的 Git 命令
+            local supported_git_commands=(
+                "add" "am" "apply" "archive" "bisect" "blame" "branch" "bundle" "checkout"
+                "cherry-pick" "citool" "clean" "clone" "commit" "config" "describe" "diff"
+                "fetch" "format-patch" "gc" "grep" "gui" "init" "log" "merge" "mv" "notes"
+                "pull" "push" "rebase" "remote" "reset" "revert" "rm" "show" "stash"
+                "status" "submodule" "switch" "tag" "worktree"
+            )
+            
+            local first_arg="${1}"
+            local is_supported=false
+            
+            # 检查第一个参数是否是支持的 Git 命令
+            for cmd in "${supported_git_commands[@]}"; do
+                if [[ "$first_arg" == "$cmd" ]]; then
+                    is_supported=true
+                    break
+                fi
+            done
+            
+            if [[ "$is_supported" == "true" ]]; then
+                # 执行 Git 命令
+                run_command "$@"
+            else
+                # 不支持的命令，显示错误提示
+                echo -e "${BOLD_RED}错误: 不支持的命令: ${first_arg}${NC}"
+                echo ""
+                echo -e "${YELLOW}支持的命令:${NC}"
+                echo -e "${CYAN}  工具命令: list, init, config, set-github-token, delete, clean, upgrade${NC}"
+                echo -e "${CYAN}  构建命令: prebuild, build, install, build:check, build:ios${NC}"
+                echo -e "${CYAN}  PR 命令: pr${NC}"
+                echo -e "${CYAN}  Git 命令: ${supported_git_commands[*]}${NC}"
+                echo ""
+                echo -e "${YELLOW}使用 \"mt help\" 查看详细帮助信息${NC}"
+                exit 1
+            fi
             ;;
     esac
 }

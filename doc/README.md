@@ -86,13 +86,13 @@ mt <git-command> [options]
 
 ### 常用命令
 
-#### 分支操作
+#### 分支操作（所有分支相关命令支持多个 module）
 
 ```bash
-# 创建并切换新分支
+# 创建并切换新分支（所有仓库）
 mt checkout -b feature/new-feature
 
-# 切换分支
+# 切换分支（所有仓库）
 mt checkout main
 
 # 查看所有仓库的分支
@@ -100,7 +100,33 @@ mt branch
 
 # 查看分支详情
 mt branch -a
+
+# 合并分支（所有仓库）
+mt merge develop
+
+# 变基（所有仓库）
+mt rebase main
+
+# 选择提交（所有仓库）
+mt cherry-pick <commit>
+
+# 暂存更改（所有仓库）
+mt stash
+
+# 恢复暂存（所有仓库）
+mt stash pop
+
+# 删除本地分支
+mt delete                    # 删除最近没有使用的3个分支（分支数需>=8）
+mt delete -a                 # 删除所有分支（除了当前分支和 main/master）
 ```
+
+**注意**：以下命令会在所有配置的仓库中执行：
+- `checkout`, `branch`, `switch` - 分支切换和查看
+- `merge`, `rebase`, `cherry-pick` - 分支合并和变基
+- `status`, `stash` - 状态查看和暂存
+
+其他命令（如 `commit`, `push`, `pull`, `log`, `diff`）只在当前仓库执行。
 
 #### 提交操作
 
@@ -131,15 +157,6 @@ mt pull origin main
 mt fetch
 ```
 
-#### 合并和变基
-
-```bash
-# 合并分支
-mt merge develop
-
-# 变基
-mt rebase main
-```
 
 ### 工具命令
 
@@ -147,11 +164,21 @@ mt rebase main
 # 列出所有配置的仓库
 mt list
 
+# 初始化配置文件（优先从 mt 仓库复制，不存在则生成默认配置）
+mt init
+
 # 编辑配置文件
 mt config
 
-# 初始化配置文件（生成默认配置）
-mt init
+# 删除本地分支
+mt delete                    # 删除最近没有使用的3个分支（分支数需>=8）
+mt delete -a                 # 删除所有分支（除了当前分支和 main/master）
+
+# 清除缓存（Flutter、Android、iOS）
+mt clean
+
+# 设置 GitHub token（用于创建 PR）
+mt set-github-token <token>
 
 # 更新 mt 工具到最新版本
 mt upgrade
@@ -172,6 +199,10 @@ mt prebuild
 #### 基础构建
 
 ```bash
+# 默认构建 global debug
+mt build                                 # Global debug（默认）
+mt build -r                              # Global release
+
 # CN 版本构建（默认构建 debug）
 mt build cn                              # CN 官方渠道 debug（默认）
 mt build cn -r                           # CN 官方渠道 release
@@ -183,6 +214,34 @@ mt build cn -a -r                        # CN 所有渠道 release
 mt build global                          # Global debug（默认）
 mt build global -r                       # Global release
 mt build global -d                       # Global debug（显式指定）
+```
+
+#### 安装到设备
+
+```bash
+# 构建并安装到连接的 Android 设备
+mt install                               # Global debug（默认）
+mt install -r                            # Global release
+mt install cn                           # CN debug
+mt install cn -r                         # CN release
+mt install cn -c huawei -r               # CN 华为渠道 release
+
+# 注意：
+# - install 命令不会执行 clean，直接构建以加快速度
+# - 需要设备已通过 USB 连接并启用 USB 调试
+# - 参数与 build 命令相同
+```
+
+#### 清除缓存
+
+```bash
+# 清除 Flutter、Android 和 iOS 的缓存
+mt clean
+
+# 清除的缓存包括：
+# - Flutter: .dart_tool, .flutter-plugins, build 目录
+# - Android: .gradle, app/build, build 目录
+# - iOS: PLAUD/build, Pods, DerivedData 目录
 ```
 
 #### 编译检查
@@ -306,11 +365,23 @@ mt push origin feature/new-feature
    git submodule update --init --recursive
    ```
 
-2. **工作目录**：可以在项目根目录或任何子目录执行 `mt` 命令
+2. **工作目录**：
+   - 可以在项目根目录或任何子目录执行 `mt` 命令
+   - 分支相关命令（`checkout`, `branch`, `status` 等）会在所有仓库执行
+   - 其他命令（`commit`, `push`, `log` 等）只在当前仓库执行
 
 3. **配置文件位置**：`mt` 会自动查找项目根目录的 `.mt-config.yaml`
 
 4. **Git 命令参数**：所有 Git 命令的参数都直接传递给底层 Git 命令
+
+5. **不支持的命令**：如果输入了不支持的命令，会显示错误提示和帮助信息
+
+6. **install 命令**：不会执行 clean，直接构建以加快安装速度
+
+7. **代码变更检查**：
+   - `mt push` 会自动跳过没有代码变更的仓库
+   - `mt pr` 会自动跳过没有代码变更的仓库
+   - `mt commit` 会自动跳过没有暂存修改的仓库
 
 ## 卸载
 

@@ -72,32 +72,61 @@ repositories:
 
 #### Git 命令映射
 所有 Git 命令通过参数透传实现：
-- `mt checkout -b <branch>` → `git checkout -b <branch>`
-- `mt commit -m "msg"` → `git commit -m "msg"`
-- `mt push origin branch` → `git push origin branch`
+- `mt checkout -b <branch>` → `git checkout -b <branch>`（所有仓库）
+- `mt commit -m "msg"` → `git commit -m "msg"`（当前仓库）
+- `mt push origin branch` → `git push origin branch`（当前仓库）
 - 等等...
+
+#### 全局命令（所有仓库执行）
+以下命令会在所有配置的仓库中执行：
+- `checkout`, `branch`, `switch` - 分支切换和查看
+- `merge`, `rebase`, `cherry-pick` - 分支合并和变基
+- `status`, `stash` - 状态查看和暂存
+
+#### 本地命令（当前仓库执行）
+其他命令只在当前仓库执行：
+- `commit`, `push`, `pull`, `log`, `diff`, `add` 等
+
+#### 命令验证
+- 如果输入了不支持的 Git 命令，会显示错误提示
+- 支持的命令列表：add, am, apply, archive, bisect, blame, branch, bundle, checkout, cherry-pick, citool, clean, clone, commit, config, describe, diff, fetch, format-patch, gc, grep, gui, init, log, merge, mv, notes, pull, push, rebase, remote, reset, revert, rm, show, stash, status, submodule, switch, tag, worktree
 
 #### 工具命令
 - `mt list` - 列出所有仓库
-- `mt init` - 初始化配置
+- `mt init` - 初始化配置（优先从 mt 仓库复制，不存在则生成默认配置）
 - `mt config` - 编辑配置
+- `mt delete [-a]` - 删除本地分支（默认删除3个最旧分支，-a 删除所有）
+- `mt clean` - 清除 Flutter、Android、iOS 缓存
+- `mt set-github-token <token>` - 设置 GitHub token
+- `mt upgrade` - 更新工具到最新版本
 - `mt help` - 显示帮助
 
 #### 构建命令
 - `mt prebuild` - 构建 Flutter 模块（构建前准备）
-- `mt build <cn|global> [options]` - 构建 Android 包
+- `mt build [cn|global] [options]` - 构建 Android 包
+  - 默认市场：global
   - 默认构建类型：debug
   - 支持短参数：`-d`/`--d`/`--debug`, `-r`/`--r`/`--release`, `-p`/`--p`/`--profile`
   - CN 版本支持渠道：`-c`/`--c`/`--channel <name>`, `-a`/`--a`/`--all`
+- `mt install [cn|global] [options]` - 构建并安装 Android 包到设备
+  - 参数与 build 命令相同
+  - 不执行 clean，直接构建以加快速度
 - `mt build:check [-d|-r]` - 编译检查：同时构建 CN 和 Global 版本
+- `mt build:ios [cn|global] [options]` - 构建 iOS 包
+- `mt clean` - 清除 Flutter、Android、iOS 缓存
 
 ### 3.4 错误处理
 
-1. **配置文件检查**: 启动时检查配置文件是否存在
+1. **配置文件检查**: 启动时检查配置文件是否存在，如果不存在会自动从 mt 仓库复制
 2. **路径验证**: 检查仓库路径是否存在
-3. **Git 仓库验证**: 检查是否为有效的 Git 仓库
-4. **执行错误**: 某个仓库失败时继续执行其他仓库
-5. **结果汇总**: 最后显示成功/失败统计
+3. **Git 仓库验证**: 检查是否为有效的 Git 仓库（支持普通仓库和 Submodule）
+4. **命令验证**: 检查输入的命令是否支持，不支持则显示错误提示
+5. **执行错误**: 某个仓库失败时继续执行其他仓库
+6. **结果汇总**: 最后显示成功/失败统计
+7. **代码变更检查**: 
+   - `push` 命令自动跳过没有代码变更的仓库
+   - `pr` 命令自动跳过没有代码变更的仓库
+   - `commit` 命令自动跳过没有暂存修改的仓库
 
 ### 3.5 输出格式
 
@@ -185,7 +214,14 @@ mt checkout -b feature/new-feature
 1. **预构建** (`mt prebuild`): 执行 `build_all.sh` 构建 Flutter 模块
 2. **切换 Flavor**: 使用 `switch_flavor.sh` 切换市场版本
 3. **Gradle 构建**: 执行对应的 Gradle 任务
-4. **日志记录**: 所有构建过程记录到日志文件
+   - `build` 命令：执行 `gradlew <task>`（默认跳过 clean，直接构建）
+   - `install` 命令：执行 `gradlew <task>`（跳过 clean）
+4. **安装** (`mt install`): 构建成功后使用 `adb install -r` 安装到设备
+
+#### 构建参数设计
+- `_build_android_internal` 函数添加第 5 个参数 `skip_clean`
+- `skip_clean=true`: 跳过 clean 步骤（build/install 默认使用）
+- `skip_clean=false`: 执行 clean 步骤（如需干净构建，请先执行 `mt clean`）
 
 #### 日志系统
 - 日志目录：`mt/logs/`
@@ -213,12 +249,29 @@ mt checkout -b feature/new-feature
 
 #### build 命令
 - 功能：构建 Android APK 包
-- 默认行为：构建 debug 包
+- 默认行为：构建 global debug 包
 - 支持市场：cn、global
 - 支持构建类型：debug、release、profile（未来）
 - CN 多渠道支持：
   - 单渠道：`-c <channel>`
   - 所有渠道：`-a`（仅 release）
+- 执行 clean：默认不执行 clean，直接构建（如需清理缓存请使用 `mt clean`）
+
+#### install 命令
+- 功能：构建并安装 Android APK 包到设备
+- 参数：与 build 命令相同
+- 执行流程：
+  1. 调用 `_build_android_internal` 并传入 `skip_clean=true`
+  2. 不执行 clean，直接构建以加快速度
+  3. 构建成功后使用 `adb install -r` 安装到设备
+- 设备检查：自动检查 adb 是否可用，设备是否连接
+
+#### clean 命令
+- 功能：清除 Flutter、Android、iOS 的缓存
+- 清除内容：
+  - Flutter: `.dart_tool`, `.flutter-plugins`, `.flutter-plugins-dependencies`, `build` 目录
+  - Android: `.gradle`, `app/build`, `build` 目录
+  - iOS: `PLAUD/build`, `Pods`, `DerivedData` 目录
 
 #### build:check 命令
 - 功能：同时构建 CN 和 Global 版本
@@ -263,11 +316,19 @@ mt/logs/
 2. 添加新仓库配置
 3. 无需修改代码
 
-### 7.2 未来扩展点
+### 7.2 已实现功能
+
+- ✅ **条件执行**: `push`、`pr`、`commit` 命令自动跳过没有变更的仓库
+- ✅ **分支管理**: `delete` 命令支持智能删除本地分支
+- ✅ **缓存清理**: `clean` 命令清除 Flutter、Android、iOS 缓存
+- ✅ **快速安装**: `install` 命令跳过 clean 以加快安装速度
+- ✅ **配置自动复制**: `init` 命令优先从 mt 仓库复制配置
+- ✅ **命令验证**: 不支持的命令显示错误提示
+
+### 7.3 未来扩展点
 
 - **Profile 构建**: 支持 Profile 构建类型
 - **仓库分组**: 支持只操作特定组别的仓库
-- **条件执行**: 只操作有变更的仓库
 - **并行执行**: 可选并行模式（加快速度）
 - **Git 钩子**: 集成 Git hooks
 - **操作历史**: 记录执行历史
