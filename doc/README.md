@@ -525,6 +525,11 @@ mt pr -t "Feature: Add new feature" -d "实现了新功能"
 - 如果当前分支已经是目标分支，会跳过该仓库
 - 如果分支不存在于远程，会跳过创建 PR
 - 如果 PR 已存在，会返回已存在的 PR URL
+- 新建 PR 默认创建为 **Draft（WIP）**，并自动：
+  - 请求 **Copilot** 作为 reviewer（最佳努力）
+  - 添加 label：`MT AUTO`
+  - 已存在的 PR 不会被修改状态/标签/reviewer
+- 如需指定 Copilot reviewer 登录名，可通过环境变量覆盖：`MT_COPILOT_REVIEWER=<login> mt pr`
 - 需要确保所有仓库都已推送到远程
 
 ## 开发计划

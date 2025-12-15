@@ -2227,6 +2227,189 @@ get_repo_info() {
     fi
 }
 
+# 从 GitHub API JSON 响应中提取第一个 html_url
+# 兼容对象/数组、以及 `"html_url": "..."`（含空格）的格式
+extract_first_html_url() {
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import sys, json
+s = sys.stdin.read()
+try:
+    data = json.loads(s)
+except Exception:
+    sys.exit(0)
+def find(x):
+    if isinstance(x, dict):
+        v = x.get("html_url")
+        if isinstance(v, str) and v:
+            return v
+        for vv in x.values():
+            r = find(vv)
+            if r:
+                return r
+    elif isinstance(x, list):
+        for i in x:
+            r = find(i)
+            if r:
+                return r
+    return None
+r = find(data)
+if r:
+    sys.stdout.write(r)
+' 2>/dev/null
+        return 0
+    fi
+    
+    # fallback: sed 提取（兼容空格）
+    sed -nE 's/.*"html_url"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n 1
+}
+
+# 从 GitHub API JSON 响应中提取 PR number
+extract_pr_number() {
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import sys, json
+s = sys.stdin.read()
+try:
+    data = json.loads(s)
+except Exception:
+    sys.exit(0)
+if isinstance(data, dict):
+    n = data.get("number")
+    if isinstance(n, int):
+        sys.stdout.write(str(n))
+' 2>/dev/null
+        return 0
+    fi
+    
+    sed -nE 's/.*"number"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' | head -n 1
+}
+
+# 为 PR 添加 label（仅用于新建 PR）
+add_label_to_pr() {
+    local repo_full_name="$1"
+    local pr_number="$2"
+    local label_name="$3"
+    local github_token="$4"
+    
+    if [[ -z "$repo_full_name" ]] || [[ -z "$pr_number" ]] || [[ -z "$label_name" ]] || [[ -z "$github_token" ]]; then
+        return 1
+    fi
+    
+    local api_url="https://api.github.com/repos/${repo_full_name}/issues/${pr_number}/labels"
+    local json_data
+    json_data=$(cat <<EOF
+{
+  "labels": ["${label_name}"]
+}
+EOF
+)
+    
+    local response
+    response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Authorization: token ${github_token}" \
+        -H "Content-Type: application/json" \
+        -d "$json_data" 2>/dev/null || true)
+    
+    local http_code
+    http_code=$(echo "$response" | tail -n1)
+    
+    if [[ "$http_code" =~ ^20[0-9]$ ]]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# 确保 label 存在（不存在则创建）
+ensure_label_exists() {
+    local repo_full_name="$1"
+    local label_name="$2"
+    local github_token="$3"
+    local label_color="${4:-1D76DB}"
+    
+    if [[ -z "$repo_full_name" ]] || [[ -z "$label_name" ]] || [[ -z "$github_token" ]]; then
+        return 1
+    fi
+    
+    local api_url="https://api.github.com/repos/${repo_full_name}/labels"
+    local json_data
+    json_data=$(cat <<EOF
+{
+  "name": "${label_name}",
+  "color": "${label_color}",
+  "description": "Created by mt pr"
+}
+EOF
+)
+    
+    local response
+    response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Authorization: token ${github_token}" \
+        -H "Content-Type: application/json" \
+        -d "$json_data" 2>/dev/null || true)
+    
+    local http_code
+    http_code=$(echo "$response" | tail -n1)
+    
+    # 201: created, 422: already exists (validation failed)
+    if [[ "$http_code" == "201" ]] || [[ "$http_code" == "422" ]]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# 请求 Copilot 作为 PR reviewer（仅用于新建 PR）
+request_copilot_review() {
+    local repo_full_name="$1"
+    local pr_number="$2"
+    local github_token="$3"
+    
+    if [[ -z "$repo_full_name" ]] || [[ -z "$pr_number" ]] || [[ -z "$github_token" ]]; then
+        return 1
+    fi
+    
+    local api_url="https://api.github.com/repos/${repo_full_name}/pulls/${pr_number}/requested_reviewers"
+    
+    # 默认使用 copilot，可通过环境变量覆盖
+    local reviewer_login="${MT_COPILOT_REVIEWER:-copilot}"
+    local candidates=("$reviewer_login" "github-copilot[bot]" "Copilot")
+    
+    for reviewer_login in "${candidates[@]}"; do
+        # 跳过空值
+        if [[ -z "$reviewer_login" ]]; then
+            continue
+        fi
+        
+        local json_data
+        json_data=$(cat <<EOF
+{
+  "reviewers": ["${reviewer_login}"]
+}
+EOF
+)
+        
+        local response
+        response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${github_token}" \
+            -H "Content-Type: application/json" \
+            -d "$json_data" 2>/dev/null || true)
+        
+        local http_code
+        http_code=$(echo "$response" | tail -n1)
+        
+        if [[ "$http_code" =~ ^20[0-9]$ ]]; then
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
 # 获取已存在的 PR URL（仅检查 open 状态）
 # 参数: repo_full_name(org/repo), source_branch, target_branch, github_token
 get_existing_pr_url() {
@@ -2244,29 +2427,87 @@ get_existing_pr_url() {
     # GitHub pulls API 的 head 参数格式为 "owner:branch"
     # 注意：branch 名称可能包含 "/"（例如 feature/xxx），不能误判为 owner/branch
     local repo_owner="${repo_full_name%%/*}"
-    local head_param=""
+    
+    # 尝试多种 head 参数格式，以兼容：
+    # - 同仓库分支: repoOwner:branch
+    # - 某些团队约定的 "user/branch"（PR head 来自 fork）: user:branch
+    local head_candidates=()
     if [[ "$source_branch" == *":"* ]]; then
-        head_param="$source_branch"
+        head_candidates+=("$source_branch")
     else
-        head_param="${repo_owner}:${source_branch}"
+        head_candidates+=("${repo_owner}:${source_branch}")
+        if [[ "$source_branch" == */* ]]; then
+            local maybe_owner="${source_branch%%/*}"
+            local maybe_branch="${source_branch#*/}"
+            head_candidates+=("${maybe_owner}:${maybe_branch}")
+        fi
     fi
     
-    # 只查 open PR：若不存在 open PR，则视为“没有 PR”，允许创建新 PR
-    local prs
-    prs=$(curl -s -G "$api_url" \
-        --data-urlencode "head=${head_param}" \
-        --data-urlencode "base=${target_branch}" \
-        --data-urlencode "state=open" \
-        -H "Accept: application/vnd.github.v3+json" \
-        -H "Authorization: token ${github_token}" 2>/dev/null)
+    local pr_url=""
+    local prs=""
+    local state=""
+    local head_param=""
     
-    local pr_url
-    pr_url=$(echo "$prs" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+    for head_param in "${head_candidates[@]}"; do
+        # 1) 先尝试精确匹配：head + base（open）
+        if [[ -n "$target_branch" ]]; then
+            prs=$(curl -s -G "$api_url" \
+                --data-urlencode "head=${head_param}" \
+                --data-urlencode "base=${target_branch}" \
+                --data-urlencode "state=open" \
+                --data-urlencode "per_page=1" \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${github_token}" 2>/dev/null)
+            pr_url=$(echo "$prs" | extract_first_html_url)
+            if [[ -n "$pr_url" ]]; then
+                echo "$pr_url"
+                return 0
+            fi
+        fi
+        
+        # 2) 再尝试宽松匹配：仅 head（open）
+        prs=$(curl -s -G "$api_url" \
+            --data-urlencode "head=${head_param}" \
+            --data-urlencode "state=open" \
+            --data-urlencode "per_page=1" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${github_token}" 2>/dev/null)
+        pr_url=$(echo "$prs" | extract_first_html_url)
+        if [[ -n "$pr_url" ]]; then
+            echo "$pr_url"
+            return 0
+        fi
+    done
     
-    if [[ -n "$pr_url" ]]; then
-        echo "$pr_url"
-        return 0
-    fi
+    # open 未命中，再尝试 all（兼容某些情况下 API 提示已存在但 base 不一致/状态特殊）
+    for head_param in "${head_candidates[@]}"; do
+        if [[ -n "$target_branch" ]]; then
+            prs=$(curl -s -G "$api_url" \
+                --data-urlencode "head=${head_param}" \
+                --data-urlencode "base=${target_branch}" \
+                --data-urlencode "state=all" \
+                --data-urlencode "per_page=1" \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: token ${github_token}" 2>/dev/null)
+            pr_url=$(echo "$prs" | extract_first_html_url)
+            if [[ -n "$pr_url" ]]; then
+                echo "$pr_url"
+                return 0
+            fi
+        fi
+        
+        prs=$(curl -s -G "$api_url" \
+            --data-urlencode "head=${head_param}" \
+            --data-urlencode "state=all" \
+            --data-urlencode "per_page=1" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${github_token}" 2>/dev/null)
+        pr_url=$(echo "$prs" | extract_first_html_url)
+        if [[ -n "$pr_url" ]]; then
+            echo "$pr_url"
+            return 0
+        fi
+    done
     
     return 1
 }
@@ -2413,7 +2654,8 @@ create_github_pr() {
   "title": "${title_escaped}",
   "body": "${desc_escaped}",
   "head": "${source_branch}",
-  "base": "${target_branch}"
+  "base": "${target_branch}",
+  "draft": true
 }
 EOF
 )
@@ -2431,7 +2673,26 @@ EOF
     local body=$(echo "$response" | sed '$d')
     
     if [[ "$http_code" == "201" ]]; then
-        local pr_url=$(echo "$body" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+        local pr_url
+        pr_url=$(echo "$body" | extract_first_html_url)
+        local pr_number
+        pr_number=$(echo "$body" | extract_pr_number)
+        
+        # 仅对新建 PR 设置 label/reviewer（已存在 PR 不修改）
+        if [[ -n "$pr_number" ]]; then
+            local auto_label="MT AUTO"
+            
+            # 先尝试直接加 label；失败再创建 label 并重试一次
+            if ! add_label_to_pr "$repo_full_name" "$pr_number" "$auto_label" "$github_token"; then
+                if ensure_label_exists "$repo_full_name" "$auto_label" "$github_token" "1D76DB"; then
+                    add_label_to_pr "$repo_full_name" "$pr_number" "$auto_label" "$github_token" || true
+                fi
+            fi
+            
+            # 请求 Copilot 进行 code review（最佳努力）
+            request_copilot_review "$repo_full_name" "$pr_number" "$github_token" || true
+        fi
+        
         echo "$pr_url"
         return 0
     elif [[ "$http_code" == "422" ]]; then
@@ -2676,6 +2937,63 @@ create_prs() {
             continue
         fi
         
+        # PR 只能基于「已提交并推送到远程」的提交创建：
+        # 1) 若当前仓库存在未提交修改（工作区或暂存区），不要误报“无代码变更”
+        local has_uncommitted_changes=false
+        if ! (cd "$repo_path" && git diff --quiet 2>/dev/null); then
+            has_uncommitted_changes=true
+        fi
+        if ! (cd "$repo_path" && git diff --cached --quiet 2>/dev/null); then
+            has_uncommitted_changes=true
+        fi
+        if [[ "$has_uncommitted_changes" == true ]]; then
+            echo -e "${YELLOW}  ⚠  检测到未提交的本地修改（PR 只基于已提交并推送到远程的提交）${NC}"
+            echo -e "${YELLOW}  请先提交并推送后再执行 mt pr${NC}"
+            echo -e "${CYAN}    git add . && git commit -m \"...\" && git push${NC}"
+            pr_status_names+=("$name")
+            pr_status_values+=("需要先提交")
+            echo ""
+            continue
+        fi
+        
+        # 2) 若本地分支与远程分支不一致（常见于 amend/rebase 后未 push），不要误报“无代码变更”
+        local local_sha=""
+        local remote_sha=""
+        local_sha=$(cd "$repo_path" && git rev-parse "$current_branch" 2>/dev/null || echo "")
+        remote_sha=$(cd "$repo_path" && git rev-parse "origin/${current_branch}" 2>/dev/null || echo "")
+        if [[ -n "$local_sha" ]] && [[ -n "$remote_sha" ]] && [[ "$local_sha" != "$remote_sha" ]]; then
+            local ahead_count
+            local behind_count
+            ahead_count=$(cd "$repo_path" && git rev-list --count "origin/${current_branch}..${current_branch}" 2>/dev/null || echo "0")
+            behind_count=$(cd "$repo_path" && git rev-list --count "${current_branch}..origin/${current_branch}" 2>/dev/null || echo "0")
+            
+            echo -e "${YELLOW}  ⚠  本地分支与远程分支不一致（PR 以远程分支为准）${NC}"
+            
+            if [[ "$ahead_count" -gt 0 ]] && [[ "$behind_count" -eq 0 ]]; then
+                echo -e "${YELLOW}  本地领先 ${ahead_count} 个提交，请先推送:${NC}"
+                echo -e "${CYAN}    git push origin ${current_branch}${NC}"
+                pr_status_names+=("$name")
+                pr_status_values+=("需要先推送")
+            elif [[ "$ahead_count" -eq 0 ]] && [[ "$behind_count" -gt 0 ]]; then
+                echo -e "${YELLOW}  本地落后远程 ${behind_count} 个提交，请先同步:${NC}"
+                echo -e "${CYAN}    git pull --rebase${NC}"
+                pr_status_names+=("$name")
+                pr_status_values+=("需要先同步")
+            elif [[ "$ahead_count" -gt 0 ]] && [[ "$behind_count" -gt 0 ]]; then
+                echo -e "${YELLOW}  分支发生分叉（可能执行了 rebase/amend），请先推送（推荐 --force-with-lease）:${NC}"
+                echo -e "${CYAN}    git push --force-with-lease origin ${current_branch}${NC}"
+                pr_status_names+=("$name")
+                pr_status_values+=("需要先推送")
+            else
+                echo -e "${YELLOW}  请先推送/同步后再创建 PR${NC}"
+                pr_status_names+=("$name")
+                pr_status_values+=("需要先推送")
+            fi
+            
+            echo ""
+            continue
+        fi
+        
         # 检查是否有相对于目标分支的修改
         # 先检查远程分支是否有修改
         local has_remote_changes=false
@@ -2689,27 +3007,36 @@ create_prs() {
             (cd "$repo_path" && git fetch origin "$target_branch" "$current_branch" 2>/dev/null || true)
             local common_base
             common_base=$(cd "$repo_path" && git merge-base "origin/${target_branch}" "$current_branch" 2>/dev/null || echo "")
-            if [[ -n "$common_base" ]]; then
-                # 检查本地分支和目标分支是否有实际的代码差异
-                local has_local_diff
-                has_local_diff=$(cd "$repo_path" && git diff --quiet "${common_base}..${current_branch}" 2>/dev/null && echo "no" || echo "yes")
-                
-                if [[ "$has_local_diff" == "yes" ]]; then
-                    # 有代码差异，检查是否有未推送的提交
-                    local ahead
-                    ahead=$(cd "$repo_path" && git rev-list --count "${common_base}..${current_branch}" 2>/dev/null || echo "0")
-                    if [[ "$ahead" -gt 0 ]]; then
-                        echo -e "${YELLOW}  ⚠  警告: 有 ${ahead} 个本地提交未推送到远程${NC}"
-                        echo -e "${YELLOW}  说明: GitHub PR 是基于远程分支创建的，本地提交需要先推送到远程才能创建 PR${NC}"
-                        echo -e "${YELLOW}  请先推送: git push origin ${current_branch}${NC}"
-                        echo -e "${CYAN}  或者使用 mt push 命令推送所有仓库${NC}"
-                        pr_status_names+=("$name")
-                        pr_status_values+=("需要先推送")
-                        continue
-                    fi
-                fi
+            
+            # 无法计算 merge-base 时，不能误报“无代码变更”
+            if [[ -z "$common_base" ]]; then
+                echo -e "${BOLD_YELLOW}警告: 无法判断是否有相对于 ${target_branch} 的代码变更（merge-base 失败）${NC}"
+                echo -e "${YELLOW}可能原因:${NC}"
+                echo -e "${CYAN}  1) 目标分支名不正确或未拉取（请尝试 git fetch origin ${target_branch}）${NC}"
+                echo -e "${CYAN}  2) 分支历史无共同祖先（需要检查分支来源）${NC}"
+                pr_status_names+=("$name")
+                pr_status_values+=("无法比较")
+                echo ""
+                continue
             fi
-            # 如果本地也没有代码变更，才跳过
+            
+            # 检查本地分支和目标分支是否有实际的代码差异（基于提交快照）
+            local has_local_diff
+            has_local_diff=$(cd "$repo_path" && git diff --quiet "${common_base}..${current_branch}" 2>/dev/null && echo "no" || echo "yes")
+            
+            if [[ "$has_local_diff" == "yes" ]]; then
+                # 本地有差异，但远程未检测到变化：通常意味着本地提交尚未推送到远程
+                echo -e "${YELLOW}  ⚠  检测到本地有相对于 ${target_branch} 的提交差异，但远程分支未检测到变更${NC}"
+                echo -e "${YELLOW}  PR 以远程分支为准，请先推送当前分支到远程后再创建 PR:${NC}"
+                echo -e "${CYAN}    git push origin ${current_branch}${NC}"
+                echo -e "${CYAN}    （如执行过 rebase/amend，推荐使用 --force-with-lease）${NC}"
+                pr_status_names+=("$name")
+                pr_status_values+=("需要先推送")
+                echo ""
+                continue
+            fi
+            
+            # 本地也没有代码变更，才跳过
             echo -e "${YELLOW}  ⏭  跳过: 没有相对于 ${target_branch} 的代码变更${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("无代码变更")
