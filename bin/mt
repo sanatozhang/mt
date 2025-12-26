@@ -81,7 +81,7 @@ CROSS_MARK="✗"
 ARROW="→"
 
 # 版本号
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # 获取脚本所在目录（解析符号链接）
 get_mt_dir() {
@@ -138,14 +138,43 @@ MT_DIR="$(get_mt_dir)"
 # 查找项目根目录（向上查找，直到找到包含 .mt-config.yaml 的目录）
 find_project_root() {
     local current_dir="$1"
+    
+    # 跳过 mt 工具自己的目录
+    local mt_dir="${MT_DIR}"
+    
     while [[ "$current_dir" != "/" ]]; do
-        # 只查找配置文件，确保找到的是项目根目录
+        # 跳过 mt 工具自己的目录（避免在 mt 工具目录内执行时误识别）
+        if [[ "$current_dir" == "$mt_dir" ]]; then
+            current_dir="$(dirname "$current_dir")"
+            continue
+        fi
+        
+        # 查找配置文件，确保找到的是项目根目录
         if [[ -f "${current_dir}/.mt-config.yaml" ]]; then
             echo "$current_dir"
             return 0
         fi
+        
+        # 如果当前目录包含 plaud-android 或 plaud-ios 等子目录，可能是项目根目录
+        # 即使没有配置文件，也尝试返回（后续会生成默认配置）
+        if [[ -d "${current_dir}/plaud-android" ]] || [[ -d "${current_dir}/plaud-ios" ]]; then
+            # 检查是否包含多个 plaud 相关的子目录（更可能是项目根目录）
+            local plaud_dirs=0
+            [[ -d "${current_dir}/plaud-android" ]] && ((plaud_dirs++))
+            [[ -d "${current_dir}/plaud-ios" ]] && ((plaud_dirs++))
+            [[ -d "${current_dir}/plaud-flutter-cn" ]] && ((plaud_dirs++))
+            [[ -d "${current_dir}/plaud-flutter-global" ]] && ((plaud_dirs++))
+            [[ -d "${current_dir}/plaud-flutter-common" ]] && ((plaud_dirs++))
+            
+            if [[ $plaud_dirs -ge 2 ]]; then
+                echo "$current_dir"
+                return 0
+            fi
+        fi
+        
         current_dir="$(dirname "$current_dir")"
     done
+    
     # 如果找不到，返回当前目录
     echo "$(pwd)"
 }
@@ -316,6 +345,8 @@ format_output() {
     local name=$3
     local success=$4
     local output=$5
+    shift 5
+    local git_args=("$@")
     
     # 使用亮蓝色显示仓库名称，更明显
     echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
@@ -338,10 +369,14 @@ format_output() {
     
     if [[ "$success" == "0" ]]; then
         # 根据命令类型显示不同的成功消息，使用加粗绿色
-        if [[ "${git_args[0]}" == "checkout" ]] && [[ "${git_args[1]}" == "-b" ]]; then
-            local branch_name="${git_args[2]}"
-            echo -e "${BOLD_GREEN}  ${CHECK_MARK} 已创建并切换到分支: ${branch_name}${NC}"
-        elif [[ "${git_args[0]}" == "checkout" ]]; then
+        if [[ "${git_args[0]}" == "checkout" ]] && [[ -n "${git_args[1]:-}" ]] && [[ "${git_args[1]}" == "-b" ]]; then
+            local branch_name="${git_args[2]:-}"
+            if [[ -n "$branch_name" ]]; then
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 已创建并切换到分支: ${branch_name}${NC}"
+            else
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 执行成功${NC}"
+            fi
+        elif [[ "${git_args[0]}" == "checkout" ]] && [[ -n "${git_args[1]:-}" ]]; then
             local branch_name="${git_args[1]}"
             echo -e "${BOLD_GREEN}  ${CHECK_MARK} 已切换到分支: ${branch_name}${NC}"
         elif [[ "${git_args[0]}" == "commit" ]]; then
@@ -670,10 +705,10 @@ run_command() {
         
         if [[ ${exit_code:-0} -eq 0 ]]; then
             ((success_count++))
-            format_output "$index" "$total" "$name" "0" "$output"
+            format_output "$index" "$total" "$name" "0" "$output" "${git_args[@]}"
         else
             failed_repos+=("$name")
-            format_output "$index" "$total" "$name" "1" "$output"
+            format_output "$index" "$total" "$name" "1" "$output" "${git_args[@]}"
         fi
         
         unset exit_code
@@ -1179,11 +1214,56 @@ Git 命令示例:
   mt fetch                     获取更新
   mt merge <branch>            合并分支（所有仓库）
   mt rebase <branch>           变基（所有仓库）
+  mt submodule [options]       子模块操作（所有仓库）
+    示例: mt submodule update --init --recursive
+
+Git 命令缩写支持:
+  基础命令:
+    mt co <branch>               checkout 的缩写
+    mt cob <branch>              checkout -b 的缩写（创建并切换分支）
+    mt br                         branch 的缩写
+    mt bra                        branch -a 的缩写（显示所有分支）
+    mt ci [options]               commit 的缩写（也可用 cm）
+    mt cim "<message>"            commit -m 的缩写
+    mt ciam "<message>"           commit -am 的缩写
+    mt cane                       commit --amend --no-edit 的缩写
+    mt st                         status 的缩写
+    mt ps [remote] [branch]       push 的缩写（也可用 ph）
+    mt phf [remote] [branch]      push -f 的缩写
+    mt pl [remote] [branch]       pull 的缩写
+    mt plro [branch]              pull --rebase origin 的缩写
+    mt m <branch>                 merge 的缩写
+    mt rb <branch>                rebase 的缩写
+    mt rbi <branch>               rebase -i 的缩写（交互式变基）
+    mt rba                        rebase --abort 的缩写
+    mt rbc                        rebase --continue 的缩写
+    mt sa                          stash 的缩写
+    mt shs [message]              stash save 的缩写
+    mt sha [stash]                stash apply 的缩写
+    mt shp [stash]                stash pop 的缩写
+    mt shd [stash]                stash drop 的缩写
+    mt sw <branch>                switch 的缩写
+    mt cp <commit>                cherry-pick 的缩写
+    mt cpa                        cherry-pick --abort 的缩写
+    mt cpc                        cherry-pick --continue 的缩写
+    mt fe                          fetch 的缩写（也可用 ft）
+    mt di                          diff 的缩写
+    mt lo                          log 的缩写
+    mt rs [options]                reset 的缩写
+    mt rth [commit]               reset --hard 的缩写
+    mt rts [commit]               reset --soft 的缩写
+    mt rv <commit>                 revert 的缩写
+    mt sh <commit>                 show 的缩写
+    mt ta [options]                tag 的缩写
+    mt ad <files>                  add 的缩写
 
 工具命令:
   mt list                      列出所有配置的仓库
   mt init                      手动初始化配置文件（可选，工具会自动处理）
   mt config                     编辑配置文件
+  mt clone [目录名]             克隆 Plaud-App 仓库并初始化子模块
+                                  默认目录名: Plaud-App
+                                  会自动执行 git submodule update --init --recursive
   mt set-github-token <token>  设置 GitHub token（用于创建 PR）
   mt delete [-a|--all]         删除本地分支
                                   默认: 删除最近没有使用的3个分支（分支数需>=8）
@@ -1192,6 +1272,16 @@ Git 命令示例:
   mt upgrade                    更新 mt 工具到最新版本
   mt help                      显示帮助信息
   mt --version                 显示版本号
+
+Plaud 工具命令:
+  mt plaud version -c <code> [-f]    版本号转换：versionCode → 版本字符串
+  mt plaud version -s <string>       版本号转换：版本字符串 → versionCode
+  mt plaud log sync <file>           分析日志中的同步操作记录
+  mt plaud log clean <file>         清理网络日志格式
+  mt plaud log time-diff <file>     分析同步时间差（支持 --min-diff 过滤）
+  mt plaud check opus <file>        检查 Opus 文件格式
+  mt plaud copy <file> [count]      批量复制文件（文件名自动递增）
+  mt plaud decrypt <file> [-o <dir>]  解密 Plaud 加密文件
 
 PR 命令:
   mt pr [options]
@@ -1279,6 +1369,20 @@ PR 命令:
   mt build:ios -r                          # iOS Global release
   mt build:ios cn                         # iOS CN debug
   mt build:ios cn -r                      # iOS CN release
+
+Plaud 工具示例:
+  mt plaud version -c 66048                     # versionCode → 版本字符串
+  mt plaud version -c 66048 -f                  # 输出完整版本（包含修订号）
+  mt plaud version -s 1.0.0                     # 版本字符串 → versionCode
+  mt plaud log sync app.log                      # 分析同步操作日志
+  mt plaud log clean network.log                 # 清理网络日志格式
+  mt plaud log time-diff app.log                 # 分析同步时间差
+  mt plaud log time-diff app.log --min-diff 0.1  # 只显示时间差 >= 0.1秒的记录
+  mt plaud check opus data.txt                   # 检查 Opus 文件格式
+  mt plaud copy file.ogg                        # 复制文件50次（默认）
+  mt plaud copy file.ogg 100                     # 复制文件100次
+  mt plaud decrypt encrypted.plaud                  # 解密 Plaud 文件（输出到默认目录）
+  mt plaud decrypt encrypted.plaud -o ./output      # 指定输出目录
 
 PR 示例:
   mt pr                                    # 为所有仓库创建 PR（目标分支: main）
@@ -2516,6 +2620,162 @@ install_ios() {
     return $exit_code
 }
 
+# Python 工具脚本路径查找
+find_plaud_scripts_dir() {
+    # 优先查找 mt 项目内的脚本目录
+    local mt_scripts_dir="${MT_DIR}/scripts/plaud-tools"
+    if [[ -d "$mt_scripts_dir" ]]; then
+        echo "$mt_scripts_dir"
+        return 0
+    fi
+    
+    # 检查环境变量
+    if [[ -n "${PLAUD_SCRIPTS_DIR:-}" ]] && [[ -d "${PLAUD_SCRIPTS_DIR}" ]]; then
+        echo "${PLAUD_SCRIPTS_DIR}"
+        return 0
+    fi
+    
+    # 回退到外部脚本目录（向后兼容）
+    local possible_paths=(
+        "/Users/sanato/Desktop/code/scrip/Plaud-app-scripts"
+        "${HOME}/Desktop/code/scrip/Plaud-app-scripts"
+        "${HOME}/Documents/Plaud-app-scripts"
+        "${HOME}/code/scrip/Plaud-app-scripts"
+    )
+    
+    # 遍历可能的路径
+    for path in "${possible_paths[@]}"; do
+        if [[ -d "$path" ]]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+# 检查 Python 脚本是否存在并执行
+run_python_script() {
+    local script_name="$1"
+    shift
+    local scripts_dir
+    scripts_dir=$(find_plaud_scripts_dir)
+    
+    if [[ $? -ne 0 ]] || [[ -z "$scripts_dir" ]]; then
+        echo -e "${BOLD_RED}错误: 未找到 Plaud-app-scripts 目录${NC}"
+        echo -e "${YELLOW}请设置环境变量 PLAUD_SCRIPTS_DIR 指向脚本目录${NC}"
+        echo -e "${CYAN}例如: export PLAUD_SCRIPTS_DIR=/path/to/Plaud-app-scripts${NC}"
+        return 1
+    fi
+    
+    local script_path="${scripts_dir}/${script_name}"
+    
+    if [[ ! -f "$script_path" ]]; then
+        echo -e "${BOLD_RED}错误: 脚本文件不存在: ${script_path}${NC}"
+        return 1
+    fi
+    
+    # 检查 Python3 是否可用
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${BOLD_RED}错误: 未找到 python3 命令${NC}"
+        return 1
+    fi
+    
+    # 执行 Python 脚本
+    python3 "$script_path" "$@"
+}
+
+# Plaud 工具：版本号转换
+mt_plaud_version() {
+    if [[ $# -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 缺少参数${NC}"
+        echo -e "${YELLOW}用法:${NC}"
+        echo -e "${CYAN}  mt plaud version -c <versionCode> [-f]    将 versionCode 转换为版本字符串${NC}"
+        echo -e "${CYAN}  mt plaud version -s <版本字符串>           将版本字符串转换为 versionCode${NC}"
+        echo ""
+        echo -e "${YELLOW}示例:${NC}"
+        echo -e "${CYAN}  mt plaud version -c 66048                  # 输出: 1.0.0${NC}"
+        echo -e "${CYAN}  mt plaud version -c 66048 -f                # 输出完整版本（包含修订号）${NC}"
+        echo -e "${CYAN}  mt plaud version -s 1.0.0                  # 输出: 66048${NC}"
+        return 1
+    fi
+    
+    run_python_script "version_converter.py" "$@"
+}
+
+# Plaud 工具：日志同步分析
+mt_plaud_log_sync() {
+    if [[ $# -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 请提供日志文件路径${NC}"
+        echo -e "${YELLOW}用法: mt plaud log sync <日志文件路径>${NC}"
+        return 1
+    fi
+    
+    run_python_script "log_sync_analyzer.py" "$@"
+}
+
+# Plaud 工具：日志清理
+mt_plaud_log_clean() {
+    if [[ $# -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 请提供日志文件路径${NC}"
+        echo -e "${YELLOW}用法: mt plaud log clean <日志文件路径>${NC}"
+        return 1
+    fi
+    
+    run_python_script "log_cleaner_network.py" "$@"
+}
+
+# Plaud 工具：同步时间差分析
+mt_plaud_log_time_diff() {
+    if [[ $# -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 请提供日志文件路径${NC}"
+        echo -e "${YELLOW}用法: mt plaud log time-diff <日志文件路径> [--min-diff <秒数>]${NC}"
+        echo -e "${CYAN}示例: mt plaud log time-diff app.log --min-diff 0.1${NC}"
+        return 1
+    fi
+    
+    run_python_script "plaud_sync_time_diff.py" "$@"
+}
+
+# Plaud 工具：Opus 文件检查
+mt_plaud_check_opus() {
+    if [[ $# -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 请提供文件路径${NC}"
+        echo -e "${YELLOW}用法: mt plaud check opus <文件路径>${NC}"
+        return 1
+    fi
+    
+    run_python_script "check_opus.py" "$@"
+}
+
+# Plaud 工具：文件批量复制
+mt_plaud_copy() {
+    if [[ $# -eq 0 ]]; then
+        echo -e "${BOLD_RED}错误: 请提供文件路径${NC}"
+        echo -e "${YELLOW}用法: mt plaud copy <文件路径> [复制次数]${NC}"
+        echo -e "${CYAN}示例: mt plaud copy file.ogg 100${NC}"
+        return 1
+    fi
+    
+    run_python_script "plaud_copy_files.py" "$@"
+}
+
+# Plaud 工具：文件解密
+mt_plaud_decrypt() {
+    if [[ $# -lt 1 ]]; then
+        echo -e "${BOLD_RED}错误: 缺少参数${NC}"
+        echo -e "${YELLOW}用法: mt plaud decrypt <加密文件路径> [-o|--output-dir <输出目录>]${NC}"
+        echo ""
+        echo -e "${YELLOW}示例:${NC}"
+        echo -e "${CYAN}  mt plaud decrypt encrypted.plaud${NC}"
+        echo -e "${CYAN}  mt plaud decrypt encrypted.plaud -o /path/to/output${NC}"
+        echo -e "${CYAN}  mt plaud decrypt encrypted.plaud --output-dir /path/to/output${NC}"
+        return 1
+    fi
+    
+    run_python_script "plaudDecryptor.py" "$@"
+}
+
 # GitHub PR 相关函数
 
 # 获取 GitHub token
@@ -3589,6 +3849,77 @@ main() {
         config)
             edit_config
             ;;
+        clone)
+            # mt clone 命令：克隆 Plaud-App 仓库并初始化子模块
+            local target_dir="${2:-Plaud-App}"
+            local repo_url="git@github.com:Plaud-AI/Plaud-App.git"
+            
+            echo -e "${BLUE}========================================${NC}"
+            echo -e "${BLUE}  开始克隆 Plaud-App 仓库${NC}"
+            echo -e "${BLUE}========================================${NC}"
+            echo ""
+            echo -e "${CYAN}仓库地址: ${repo_url}${NC}"
+            echo -e "${CYAN}目标目录: ${target_dir}${NC}"
+            echo ""
+            
+            # 检查目标目录是否已存在
+            if [[ -d "$target_dir" ]]; then
+                echo -e "${BOLD_YELLOW}警告: 目录 ${target_dir} 已存在${NC}"
+                echo -e "${YELLOW}是否要继续？(y/N)${NC}"
+                read -r response
+                if [[ ! "$response" =~ ^[Yy]$ ]]; then
+                    echo -e "${YELLOW}已取消${NC}"
+                    exit 0
+                fi
+            fi
+            
+            # 执行 git clone
+            echo -e "${BLUE}[1/2] 克隆主仓库...${NC}"
+            print_command "$(pwd)" git clone "$repo_url" "$target_dir"
+            
+            if ! git clone "$repo_url" "$target_dir" 2>&1; then
+                echo -e "${BOLD_RED}${CROSS_MARK} 克隆失败${NC}"
+                exit 1
+            fi
+            
+            echo ""
+            echo -e "${GREEN}${CHECK_MARK} 主仓库克隆成功${NC}"
+            echo ""
+            
+            # 进入目录并初始化子模块
+            echo -e "${BLUE}[2/2] 初始化子模块...${NC}"
+            echo -e "${CYAN}执行: git submodule update --init --recursive${NC}"
+            echo ""
+            
+            # 执行子模块初始化，并显示输出
+            local submodule_output
+            if ! submodule_output=$(cd "$target_dir" && git submodule update --init --recursive 2>&1); then
+                echo -e "${BOLD_RED}${CROSS_MARK} 子模块初始化失败${NC}"
+                echo -e "${YELLOW}输出:${NC}"
+                echo "$submodule_output" | sed 's/^/  /'
+                echo ""
+                echo -e "${BOLD_YELLOW}警告: 主仓库已克隆成功，但子模块初始化失败${NC}"
+                echo -e "${YELLOW}你可以稍后手动执行: cd ${target_dir} && git submodule update --init --recursive${NC}"
+                exit 1
+            fi
+            
+            # 显示子模块初始化的输出（如果有）
+            if [[ -n "$submodule_output" ]]; then
+                echo "$submodule_output" | sed 's/^/  /'
+            fi
+            
+            echo ""
+            echo -e "${GREEN}${CHECK_MARK} 子模块初始化成功${NC}"
+            echo ""
+            echo -e "${BLUE}========================================${NC}"
+            echo -e "${GREEN}${CHECK_MARK} 克隆完成！${NC}"
+            echo -e "${BLUE}========================================${NC}"
+            echo ""
+            echo -e "${CYAN}下一步:${NC}"
+            echo -e "${CYAN}  cd ${target_dir}${NC}"
+            echo -e "${CYAN}  mt list  # 查看所有仓库${NC}"
+            echo ""
+            ;;
         set-github-token)
             if [[ -z "${2:-}" ]]; then
                 echo -e "${BOLD_RED}错误: 请提供 GitHub token${NC}"
@@ -3711,6 +4042,75 @@ main() {
                 exit 1
             fi
             ;;
+        plaud)
+            shift
+            case "${1:-}" in
+                version)
+                    shift
+                    mt_plaud_version "$@"
+                    ;;
+                log)
+                    shift
+                    case "${1:-}" in
+                        sync)
+                            shift
+                            mt_plaud_log_sync "$@"
+                            ;;
+                        clean)
+                            shift
+                            mt_plaud_log_clean "$@"
+                            ;;
+                        time-diff)
+                            shift
+                            mt_plaud_log_time_diff "$@"
+                            ;;
+                        *)
+                            echo -e "${BOLD_RED}错误: 未知的 plaud log 子命令: ${1:-}${NC}"
+                            echo -e "${YELLOW}用法:${NC}"
+                            echo -e "${CYAN}  mt plaud log sync <日志文件路径>        分析日志中的同步操作${NC}"
+                            echo -e "${CYAN}  mt plaud log clean <日志文件路径>       清理网络日志格式${NC}"
+                            echo -e "${CYAN}  mt plaud log time-diff <日志文件路径>   分析同步时间差${NC}"
+                            exit 1
+                            ;;
+                    esac
+                    ;;
+                check)
+                    shift
+                    case "${1:-}" in
+                        opus)
+                            shift
+                            mt_plaud_check_opus "$@"
+                            ;;
+                        *)
+                            echo -e "${BOLD_RED}错误: 未知的 plaud check 子命令: ${1:-}${NC}"
+                            echo -e "${YELLOW}用法: mt plaud check opus <文件路径>${NC}"
+                            exit 1
+                            ;;
+                    esac
+                    ;;
+                copy)
+                    shift
+                    mt_plaud_copy "$@"
+                    ;;
+                decrypt)
+                    shift
+                    mt_plaud_decrypt "$@"
+                    ;;
+                *)
+                    echo -e "${BOLD_RED}错误: 未知的 plaud 子命令: ${1:-}${NC}"
+                    echo -e "${YELLOW}用法:${NC}"
+                    echo -e "${CYAN}  mt plaud version -c <code> [-f]    版本号转换：versionCode → 版本字符串${NC}"
+                    echo -e "${CYAN}  mt plaud version -s <string>         版本号转换：版本字符串 → versionCode${NC}"
+                    echo -e "${CYAN}  mt plaud log sync <file>            分析日志中的同步操作记录${NC}"
+                    echo -e "${CYAN}  mt plaud log clean <file>            清理网络日志格式${NC}"
+                    echo -e "${CYAN}  mt plaud log time-diff <file>        分析同步时间差（支持 --min-diff 过滤）${NC}"
+                    echo -e "${CYAN}  mt plaud check opus <file>           检查 Opus 文件格式${NC}"
+                    echo -e "${CYAN}  mt plaud copy <file> [count]        批量复制文件（文件名自动递增）${NC}"
+                    echo -e "${CYAN}  mt plaud decrypt <file> [-o <dir>]   解密 Plaud 加密文件${NC}"
+                    exit 1
+                    ;;
+            esac
+            ;;
         help|--help|-h)
             show_help
             ;;
@@ -3732,16 +4132,202 @@ main() {
             
             local first_arg="${1}"
             local is_supported=false
+            local actual_cmd=""
+            local additional_args=()
             
-            # 检查第一个参数是否是支持的 Git 命令
-            for cmd in "${supported_git_commands[@]}"; do
-                if [[ "$first_arg" == "$cmd" ]]; then
+            # 先检查是否是 Git 命令缩写（包括带参数的缩写）
+            case "$first_arg" in
+                # 基础命令缩写
+                co)
+                    actual_cmd="checkout"
                     is_supported=true
-                    break
-                fi
-            done
+                    ;;
+                cob)
+                    # checkout -b
+                    actual_cmd="checkout"
+                    additional_args=("-b")
+                    is_supported=true
+                    ;;
+                br)
+                    actual_cmd="branch"
+                    is_supported=true
+                    ;;
+                bra)
+                    # branch -a
+                    actual_cmd="branch"
+                    additional_args=("-a")
+                    is_supported=true
+                    ;;
+                ci|cm)
+                    actual_cmd="commit"
+                    is_supported=true
+                    ;;
+                cim)
+                    # commit -m
+                    actual_cmd="commit"
+                    additional_args=("-m")
+                    is_supported=true
+                    ;;
+                ciam)
+                    # commit -am
+                    actual_cmd="commit"
+                    additional_args=("-am")
+                    is_supported=true
+                    ;;
+                cane)
+                    # commit --amend --no-edit
+                    actual_cmd="commit"
+                    additional_args=("--amend" "--no-edit")
+                    is_supported=true
+                    ;;
+                st)
+                    actual_cmd="status"
+                    is_supported=true
+                    ;;
+                ps|ph)
+                    actual_cmd="push"
+                    is_supported=true
+                    ;;
+                phf)
+                    # push -f
+                    actual_cmd="push"
+                    additional_args=("-f")
+                    is_supported=true
+                    ;;
+                pl)
+                    actual_cmd="pull"
+                    is_supported=true
+                    ;;
+                plro)
+                    # pull --rebase origin
+                    actual_cmd="pull"
+                    additional_args=("--rebase" "origin")
+                    is_supported=true
+                    ;;
+                m)
+                    actual_cmd="merge"
+                    is_supported=true
+                    ;;
+                rb|rbi)
+                    # rebase 或 rebase -i
+                    actual_cmd="rebase"
+                    if [[ "$first_arg" == "rbi" ]]; then
+                        additional_args=("-i")
+                    fi
+                    is_supported=true
+                    ;;
+                rba)
+                    # rebase --abort
+                    actual_cmd="rebase"
+                    additional_args=("--abort")
+                    is_supported=true
+                    ;;
+                rbc)
+                    # rebase --continue
+                    actual_cmd="rebase"
+                    additional_args=("--continue")
+                    is_supported=true
+                    ;;
+                sa|shs|sha|shp|shd)
+                    # stash 相关命令
+                    actual_cmd="stash"
+                    case "$first_arg" in
+                        shs)
+                            additional_args=("save")
+                            ;;
+                        sha)
+                            additional_args=("apply")
+                            ;;
+                        shp)
+                            additional_args=("pop")
+                            ;;
+                        shd)
+                            additional_args=("drop")
+                            ;;
+                    esac
+                    is_supported=true
+                    ;;
+                sw)
+                    actual_cmd="switch"
+                    is_supported=true
+                    ;;
+                cp)
+                    actual_cmd="cherry-pick"
+                    is_supported=true
+                    ;;
+                cpa)
+                    # cherry-pick --abort
+                    actual_cmd="cherry-pick"
+                    additional_args=("--abort")
+                    is_supported=true
+                    ;;
+                cpc)
+                    # cherry-pick --continue
+                    actual_cmd="cherry-pick"
+                    additional_args=("--continue")
+                    is_supported=true
+                    ;;
+                fe|ft)
+                    actual_cmd="fetch"
+                    is_supported=true
+                    ;;
+                di)
+                    actual_cmd="diff"
+                    is_supported=true
+                    ;;
+                lo)
+                    actual_cmd="log"
+                    is_supported=true
+                    ;;
+                rs|rth|rts)
+                    # reset 相关命令
+                    actual_cmd="reset"
+                    case "$first_arg" in
+                        rth)
+                            additional_args=("--hard")
+                            ;;
+                        rts)
+                            additional_args=("--soft")
+                            ;;
+                    esac
+                    is_supported=true
+                    ;;
+                rv)
+                    actual_cmd="revert"
+                    is_supported=true
+                    ;;
+                sh)
+                    actual_cmd="show"
+                    is_supported=true
+                    ;;
+                ta)
+                    actual_cmd="tag"
+                    is_supported=true
+                    ;;
+                ad)
+                    actual_cmd="add"
+                    is_supported=true
+                    ;;
+                *)
+                    # 检查是否是完整的 Git 命令
+                    for cmd in "${supported_git_commands[@]}"; do
+                        if [[ "$first_arg" == "$cmd" ]]; then
+                            actual_cmd="$first_arg"
+                            is_supported=true
+                            break
+                        fi
+                    done
+                    ;;
+            esac
             
             if [[ "$is_supported" == "true" ]]; then
+                # 如果有额外的参数需要插入，重新构建参数列表
+                if [[ ${#additional_args[@]} -gt 0 ]]; then
+                    set -- "$actual_cmd" "${additional_args[@]}" "${@:2}"
+                elif [[ "$actual_cmd" != "$first_arg" ]]; then
+                    # 只是简单的命令替换
+                    set -- "$actual_cmd" "${@:2}"
+                fi
                 # 执行 Git 命令
                 run_command "$@"
             else
@@ -3751,8 +4337,10 @@ main() {
                 echo -e "${YELLOW}支持的命令:${NC}"
                 echo -e "${CYAN}  工具命令: list, init, config, set-github-token, delete, clean, upgrade${NC}"
                 echo -e "${CYAN}  构建命令: prebuild, build, install, install:ios, build:check, build:ios${NC}"
+                echo -e "${CYAN}  Plaud 工具: plaud${NC}"
                 echo -e "${CYAN}  PR 命令: pr${NC}"
                 echo -e "${CYAN}  Git 命令: ${supported_git_commands[*]}${NC}"
+                echo -e "${CYAN}  Git 缩写: co/cob(checkout), br/bra(branch), ci/cm/cim/ciam/cane(commit), st(status), ps/ph/phf(push), pl/plro(pull), m(merge), rb/rbi/rba/rbc(rebase), sa/shs/sha/shp/shd(stash), sw(switch), cp/cpa/cpc(cherry-pick), fe/ft(fetch), di(diff), lo(log), rs/rth/rts(reset), rv(revert), sh(show), ta(tag), ad(add)${NC}"
                 echo ""
                 echo -e "${YELLOW}使用 \"mt help\" 查看详细帮助信息${NC}"
                 exit 1
