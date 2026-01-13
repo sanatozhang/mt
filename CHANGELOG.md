@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.2.0] - 2024-12-18
+
+### 新增功能
+
+#### 子仓库分支操作同步
+- 分支相关操作（checkout, branch, merge, rebase, switch, cherry-pick）现在会在 Android 和 iOS 项目的子仓库中同步执行
+- Android 子仓库：`plaud-android/nicebuildSDK`（自动检测并执行）
+- iOS 子仓库：`plaud-ios/PLAUD/PenSubmodules`（自动检测并执行）
+- 子仓库不存在时会自动跳过，不影响主仓库操作
+
+#### 克隆功能增强
+- `mt clone` 命令现在会自动克隆 Android 子仓库 `ble-sdk-android` 到 `plaud-android/nicebuildSDK`
+- iOS 子仓库通过 `git submodule update --init --recursive` 自动初始化（Git 子模块）
+
+### 改进
+
+#### Push 命令行为变更
+- `mt push` 现在会对所有配置的仓库执行 push 操作，不再检查是否有本地提交
+- 移除 push 前的变更检测逻辑，简化使用流程
+- 如果某个仓库没有可推送的提交，会显示 Git 的错误信息，但不会提前跳过
+
+#### 执行结果统计优化
+- 修复了分支操作包含子仓库时，总结统计显示不正确的问题（如显示 7/5）
+- 现在正确统计所有执行的仓库（主仓库 + 子仓库），显示准确的执行数量
+
 ## [1.1.0] - 2024-12-17
 
 ### 新增功能

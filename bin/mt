@@ -81,7 +81,7 @@ CROSS_MARK="✗"
 ARROW="→"
 
 # 版本号
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 # 获取脚本所在目录（解析符号链接）
 get_mt_dir() {
@@ -402,6 +402,41 @@ format_output() {
 }
 
 # 检查仓库是否有修改（用于 commit 和 push）
+# 判断是否是分支相关命令
+is_branch_related_command() {
+    local cmd="${1:-}"
+    case "$cmd" in
+        checkout|branch|merge|rebase|switch|cherry-pick)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# 执行子仓库的分支相关操作
+execute_subrepo_command() {
+    local subrepo_path="$1"
+    local subrepo_name="$2"
+    shift 2
+    local git_args=("$@")
+    
+    # 检查路径是否存在
+    if [[ ! -d "$subrepo_path" ]]; then
+        return 1
+    fi
+    
+    # 检查是否是 Git 仓库
+    if [[ ! -d "${subrepo_path}/.git" ]] && [[ ! -f "${subrepo_path}/.git" ]]; then
+        return 1
+    fi
+    
+    # 执行 Git 命令
+    cd "$subrepo_path" && git "${git_args[@]}" 2>&1
+    return $?
+}
+
 get_branch_base_ref() {
     local repo_path="$1"
     local branch="$2"
@@ -671,15 +706,6 @@ run_command() {
                 skipped_repos+=("$name")
                 continue
             fi
-        elif [[ "${git_args[0]}" == "push" ]]; then
-            if ! check_repo_has_changes "$repo_info" "push" "${git_args[@]}"; then
-                echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
-                echo -e "${YELLOW}  ⏭  跳过: 没有需要推送的代码变更${NC}"
-                echo ""
-                ((skipped_count++))
-                skipped_repos+=("$name")
-                continue
-            fi
         elif [[ "${git_args[0]}" == "diff" ]]; then
             # git diff 默认返回 0（即使有 diff），因此用 --quiet 做差异探测
             # exit code: 0=无差异, 1=有差异, 其他=错误（交给后续 execute_git_command 输出错误信息）
@@ -714,6 +740,55 @@ run_command() {
         unset exit_code
     done
     
+    # 如果是分支相关命令，还需要在子仓库中执行
+    local subrepo_count=0
+    if is_branch_related_command "${git_args[0]}"; then
+        local subrepos=(
+            "plaud-android/nicebuildSDK|nicebuildSDK"
+            "plaud-ios/PLAUD/PenSubmodules|PenSubmodules"
+        )
+        
+        for subrepo_info in "${subrepos[@]}"; do
+            IFS='|' read -r subrepo_path subrepo_name <<< "$subrepo_info"
+            local full_path="${PROJECT_ROOT}/${subrepo_path}"
+            
+            # 检查子仓库是否存在
+            if [[ ! -d "$full_path" ]]; then
+                continue
+            fi
+            
+            # 检查是否是 Git 仓库
+            if [[ ! -d "${full_path}/.git" ]] && [[ ! -f "${full_path}/.git" ]]; then
+                continue
+            fi
+            
+            # 计数子仓库（用于统计）
+            ((subrepo_count++))
+            
+            # 执行子仓库命令
+            echo ""
+            echo -e "${BOLD_CYAN}[子仓库] ${subrepo_name}${NC}"
+            print_command "$full_path" git "${git_args[@]}"
+            
+            local subrepo_output
+            local subrepo_exit_code
+            subrepo_output=$(execute_subrepo_command "$full_path" "$subrepo_name" "${git_args[@]}" 2>&1) || subrepo_exit_code=$?
+            
+            if [[ ${subrepo_exit_code:-0} -eq 0 ]]; then
+                ((success_count++))
+                format_output "子" "子" "$subrepo_name" "0" "$subrepo_output" "${git_args[@]}"
+            else
+                failed_repos+=("${subrepo_name}(子仓库)")
+                format_output "子" "子" "$subrepo_name" "1" "$subrepo_output" "${git_args[@]}"
+            fi
+            
+            unset subrepo_exit_code
+        done
+    fi
+    
+    # 计算实际处理的仓库总数（主仓库 + 子仓库）
+    local actual_total=$((total - skipped_count + subrepo_count))
+    
     # 汇总结果 - 使用加粗颜色让总结更明显
     echo ""
     local processed_count=$((success_count + ${#failed_repos[@]}))
@@ -722,7 +797,7 @@ run_command() {
             echo -e "${BOLD_GREEN}${CHECK_MARK} 所有需要处理的仓库执行成功 (${success_count}/${processed_count})${NC}"
             echo -e "${YELLOW}  跳过仓库 (${skipped_count}): ${skipped_repos[*]}${NC}"
         else
-            echo -e "${BOLD_GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${total})${NC}"
+            echo -e "${BOLD_GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${actual_total})${NC}"
         fi
         return 0
     elif [[ ${#failed_repos[@]} -gt 0 ]]; then
@@ -738,7 +813,8 @@ run_command() {
         echo -e "${YELLOW}⏭  所有仓库都没有修改，已跳过${NC}"
         return 0
     else
-        echo -e "${BOLD_GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${total})${NC}"
+        local actual_total=$((total - skipped_count + subrepo_count))
+        echo -e "${BOLD_GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${actual_total})${NC}"
         return 0
     fi
 }
@@ -3874,7 +3950,7 @@ main() {
             fi
             
             # 执行 git clone
-            echo -e "${BLUE}[1/2] 克隆主仓库...${NC}"
+            echo -e "${BLUE}[1/3] 克隆主仓库...${NC}"
             print_command "$(pwd)" git clone "$repo_url" "$target_dir"
             
             if ! git clone "$repo_url" "$target_dir" 2>&1; then
@@ -3887,7 +3963,7 @@ main() {
             echo ""
             
             # 进入目录并初始化子模块
-            echo -e "${BLUE}[2/2] 初始化子模块...${NC}"
+            echo -e "${BLUE}[2/3] 初始化子模块...${NC}"
             echo -e "${CYAN}执行: git submodule update --init --recursive${NC}"
             echo ""
             
@@ -3910,6 +3986,31 @@ main() {
             
             echo ""
             echo -e "${GREEN}${CHECK_MARK} 子模块初始化成功${NC}"
+            echo ""
+            
+            # 克隆 Android 子仓库（需要手动 clone）
+            echo -e "${BLUE}[3/3] 克隆 Android 子仓库...${NC}"
+            local android_subrepo_path="${target_dir}/plaud-android/nicebuildSDK"
+            local android_subrepo_url="git@github.com:Plaud-AI/ble-sdk-android.git"
+            
+            # 检查父目录是否存在
+            if [[ ! -d "${target_dir}/plaud-android" ]]; then
+                echo -e "${BOLD_YELLOW}警告: plaud-android 目录不存在，跳过 Android 子仓库克隆${NC}"
+            elif [[ -d "$android_subrepo_path" ]]; then
+                echo -e "${YELLOW}  ⏭  跳过: nicebuildSDK 目录已存在${NC}"
+            else
+                echo -e "${CYAN}执行: git clone ${android_subrepo_url} ${android_subrepo_path}${NC}"
+                echo ""
+                
+                if ! (cd "${target_dir}/plaud-android" && git clone "$android_subrepo_url" "nicebuildSDK" 2>&1); then
+                    echo -e "${BOLD_YELLOW}警告: Android 子仓库克隆失败${NC}"
+                    echo -e "${YELLOW}你可以稍后手动执行: cd ${target_dir}/plaud-android && git clone ${android_subrepo_url} nicebuildSDK${NC}"
+                else
+                    echo ""
+                    echo -e "${GREEN}${CHECK_MARK} Android 子仓库克隆成功${NC}"
+                fi
+            fi
+            
             echo ""
             echo -e "${BLUE}========================================${NC}"
             echo -e "${GREEN}${CHECK_MARK} 克隆完成！${NC}"
