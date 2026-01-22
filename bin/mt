@@ -81,7 +81,7 @@ CROSS_MARK="✗"
 ARROW="→"
 
 # 版本号
-VERSION="1.2.0"
+VERSION="1.4.0"
 
 # GitHub 仓库信息（用于版本检查）
 GITHUB_REPO="sanatozhang/mt"
@@ -115,7 +115,12 @@ check_version_update() {
     # 缓存文件路径（24小时检查一次）
     local cache_dir="${HOME}/.cache/mt"
     local cache_file="${cache_dir}/version_check"
-    mkdir -p "$cache_dir"
+    
+    # 尝试创建缓存目录，如果失败则静默跳过版本检查（不影响主功能）
+    if ! mkdir -p "$cache_dir" 2>/dev/null; then
+        # 如果无法创建缓存目录（可能是权限问题），静默跳过版本检查
+        return 0
+    fi
     
     # 检查缓存（24小时内不重复检查）
     local now=$(date +%s)
@@ -456,8 +461,89 @@ format_output() {
     
     # 显示命令输出（如果有）
     if [[ -n "$output" ]]; then
-        # 根据成功/失败状态使用不同颜色
-        if [[ "$success" == "0" ]]; then
+        # 特殊处理 status 命令，使其颜色与 git status 一致
+        if [[ "${git_args[0]}" == "status" ]] && [[ "$success" == "0" ]]; then
+            # 解析 git status 输出并应用颜色
+            while IFS= read -r line; do
+                # 跳过空行
+                if [[ -z "$line" ]]; then
+                    echo ""
+                    continue
+                fi
+                
+                # "On branch ..." - 使用青色/蓝色
+                if [[ "$line" =~ ^On\ branch ]]; then
+                    echo -e "  ${CYAN}${line}${NC}"
+                # "Changes to be committed:" - 使用绿色
+                elif [[ "$line" =~ ^Changes\ to\ be\ committed ]]; then
+                    echo -e "  ${GREEN}${line}${NC}"
+                # "Changes not staged for commit:" - 使用红色
+                elif [[ "$line" =~ ^Changes\ not\ staged\ for\ commit ]]; then
+                    echo -e "  ${RED}${line}${NC}"
+                # "Untracked files:" - 使用红色
+                elif [[ "$line" =~ ^Untracked\ files ]]; then
+                    echo -e "  ${RED}${line}${NC}"
+                # "Your branch is ahead/behind..." - 使用黄色
+                elif [[ "$line" =~ ^Your\ branch ]]; then
+                    echo -e "  ${YELLOW}${line}${NC}"
+                # "nothing to commit" - 使用绿色
+                elif [[ "$line" =~ ^nothing\ to\ commit ]]; then
+                    echo -e "  ${GREEN}${line}${NC}"
+                # "no changes added to commit" - 使用黄色
+                elif [[ "$line" =~ ^no\ changes\ added\ to\ commit ]]; then
+                    echo -e "  ${YELLOW}${line}${NC}"
+                # "use \"git add" - 使用黄色（提示信息）
+                elif [[ "$line" =~ ^[[:space:]]*\(use\ \"git ]]; then
+                    echo -e "  ${YELLOW}${line}${NC}"
+                # "modified:" - 使用红色
+                elif [[ "$line" =~ ^[[:space:]]*modified: ]]; then
+                    echo -e "  ${RED}${line}${NC}"
+                # "new file:" - 使用绿色
+                elif [[ "$line" =~ ^[[:space:]]*new\ file: ]]; then
+                    echo -e "  ${GREEN}${line}${NC}"
+                # "deleted:" - 使用红色
+                elif [[ "$line" =~ ^[[:space:]]*deleted: ]]; then
+                    echo -e "  ${RED}${line}${NC}"
+                # "renamed:" - 使用黄色
+                elif [[ "$line" =~ ^[[:space:]]*renamed: ]]; then
+                    echo -e "  ${YELLOW}${line}${NC}"
+                # "both modified:" - 使用红色
+                elif [[ "$line" =~ ^[[:space:]]*both\ modified: ]]; then
+                    echo -e "  ${RED}${line}${NC}"
+                # 其他行（如文件列表中的文件路径）- 根据状态码判断
+                # git status 的 porcelain 格式: "XY file"
+                # X = staged, Y = unstaged
+                # M = modified, A = added, D = deleted, R = renamed, C = copied, U = unmerged, ? = untracked
+                # 格式: "M  file" (modified, staged) - 绿色
+                # 格式: " M file" (modified, unstaged) - 红色
+                # 格式: "MM file" (modified, both staged and unstaged) - 根据上下文
+                # 格式: "A  file" (added, staged) - 绿色
+                # 格式: "D  file" (deleted, staged) - 红色
+                # 格式: "?? file" (untracked) - 红色
+                elif [[ "$line" =~ ^[[:space:]]*\?\?[[:space:]]+ ]]; then
+                    # 未跟踪的文件 - 红色
+                    echo -e "  ${RED}${line}${NC}"
+                elif [[ "$line" =~ ^[[:space:]]*[AMD][[:space:]]+[[:space:]]+[^[:space:]] ]] || [[ "$line" =~ ^[[:space:]]*[AMD][[:space:]]+[[:space:]]+$ ]]; then
+                    # 已暂存的修改/添加/删除（X 有值，Y 为空） - 绿色
+                    echo -e "  ${GREEN}${line}${NC}"
+                elif [[ "$line" =~ ^[[:space:]]*[[:space:]]+[MDU][[:space:]]+[^[:space:]] ]] || [[ "$line" =~ ^[[:space:]]*[[:space:]]+[MDU][[:space:]]+$ ]]; then
+                    # 未暂存的修改/删除/未合并（X 为空，Y 有值） - 红色
+                    echo -e "  ${RED}${line}${NC}"
+                elif [[ "$line" =~ ^[[:space:]]*R[[:space:]]+ ]]; then
+                    # 已暂存的重命名 - 黄色
+                    echo -e "  ${YELLOW}${line}${NC}"
+                elif [[ "$line" =~ ^[[:space:]]*[[:space:]]+R ]]; then
+                    # 未暂存的重命名 - 红色
+                    echo -e "  ${RED}${line}${NC}"
+                elif [[ "$line" =~ ^[[:space:]]*[AMD][[:space:]]+[MDU][[:space:]]+ ]]; then
+                    # 同时有暂存和未暂存的修改 - 根据主要状态判断（优先显示暂存状态）
+                    echo -e "  ${GREEN}${line}${NC}"
+                else
+                    # 默认使用灰色（保持原样，让 git 自己的颜色配置生效）
+                    echo -e "  ${GRAY}${line}${NC}"
+                fi
+            done <<< "$output"
+        elif [[ "$success" == "0" ]]; then
             # 成功：使用灰色显示输出，让输出更明显但不抢眼
             while IFS= read -r line; do
                 echo -e "  ${GRAY}${line}${NC}"
@@ -471,8 +557,11 @@ format_output() {
     fi
     
     if [[ "$success" == "0" ]]; then
-        # 根据命令类型显示不同的成功消息，使用加粗绿色
-        if [[ "${git_args[0]}" == "checkout" ]] && [[ -n "${git_args[1]:-}" ]] && [[ "${git_args[1]}" == "-b" ]]; then
+        # status 命令不需要显示额外的成功消息，因为输出已经包含所有信息
+        if [[ "${git_args[0]}" == "status" ]]; then
+            # status 命令不显示额外的成功提示
+            :
+        elif [[ "${git_args[0]}" == "checkout" ]] && [[ -n "${git_args[1]:-}" ]] && [[ "${git_args[1]}" == "-b" ]]; then
             local branch_name="${git_args[2]:-}"
             if [[ -n "$branch_name" ]]; then
                 echo -e "${BOLD_GREEN}  ${CHECK_MARK} 已创建并切换到分支: ${branch_name}${NC}"
@@ -1447,7 +1536,11 @@ Git 命令缩写支持:
   mt delete [-a|--all]         删除本地分支
                                   默认: 删除最近没有使用的3个分支（分支数需>=8）
                                   -a: 删除所有分支（除了当前分支和 main/master）
-  mt clean                      清除 Flutter、Android 和 iOS 的缓存
+  mt clean [-a|-i|-f]           清除缓存
+                                  默认: 清除全部（Android + iOS + Flutter）
+                                  -a, --android: 只清除 Android 缓存
+                                  -i, --ios: 只清除 iOS 缓存
+                                  -f, --flutter: 只清除 Flutter 缓存
   mt upgrade                    更新 mt 工具到最新版本
   mt help                      显示帮助信息
   mt --version                 显示版本号
@@ -1511,6 +1604,12 @@ PR 命令:
     选项: 与 build 命令相同
     说明: 先执行 prebuild 构建 Flutter 模块，然后构建并安装到设备
   
+  mt rebuild [cn|global] [options]
+    清理缓存并重新构建（clean + go）
+    选项: 与 build 命令相同
+    说明: 先执行 clean 清理所有缓存，然后执行 go 命令（prebuild + install）
+    等同于: mt clean && mt go [cn|global] [options]
+  
   mt build:check [-d|-r]
     编译检查：同时构建 CN 和 Global 版本（用于 push 前检查，默认 debug）
   
@@ -1543,6 +1642,13 @@ PR 命令:
   mt go                                    # 执行 prebuild + install（Global debug，Android）
   mt go cn                                 # 执行 prebuild + install（CN debug，Android）
   mt go cn -r                              # 执行 prebuild + install（CN release，Android）
+  mt rebuild                                # 清理缓存并重新构建（Global debug，Android）
+  mt rebuild cn                             # 清理缓存并重新构建（CN debug，Android）
+  mt rebuild cn -r                          # 清理缓存并重新构建（CN release，Android）
+  mt clean                                  # 清理全部缓存（Android + iOS + Flutter）
+  mt clean -a                               # 只清理 Android 缓存
+  mt clean -i                               # 只清理 iOS 缓存
+  mt clean -f                               # 只清理 Flutter 缓存
   mt build:check -r                        # 同时构建 CN 和 Global release（Android）
   mt build:ios                             # iOS Global debug（默认）
   mt build:ios -r                          # iOS Global release
@@ -1917,6 +2023,7 @@ _install_android_internal() {
     for apk_file in "${apk_files[@]}"; do
         echo -e "${CYAN}安装: $(basename "$apk_file")${NC}"
         echo -e "${CYAN}路径: ${apk_file}${NC}"
+        echo ""
         
         # 使用 adb install -r 安装（-r 表示替换已存在的应用）
         # 捕获输出和退出码
@@ -1924,11 +2031,6 @@ _install_android_internal() {
         local install_exit_code
         install_output=$(adb install -r "$apk_file" 2>&1)
         install_exit_code=$?
-        
-        # 显示安装输出
-        if [[ -n "$install_output" ]]; then
-            echo -e "${GRAY}${install_output}${NC}"
-        fi
         
         # 检查安装结果
         if [[ $install_exit_code -eq 0 ]]; then
@@ -1939,10 +2041,54 @@ _install_android_internal() {
             else
                 # 即使退出码是 0，但输出中没有 success，可能是警告
                 echo -e "${BOLD_YELLOW}  ⚠  安装完成（可能有警告）${NC}"
+                if [[ -n "$install_output" ]]; then
+                    echo -e "${YELLOW}  输出: ${install_output}${NC}"
+                fi
                 ((install_success++))
             fi
         else
+            # 安装失败：显示详细的错误信息
             echo -e "${BOLD_RED}  ${CROSS_MARK} 安装失败${NC}"
+            echo ""
+            echo -e "${BOLD_RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${BOLD_RED}  错误详情:${NC}"
+            echo -e "${BOLD_RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            
+            # 显示完整的错误输出（使用红色突出显示）
+            if [[ -n "$install_output" ]]; then
+                echo -e "${RED}${install_output}${NC}"
+            else
+                echo -e "${RED}  未获取到错误信息（退出码: ${install_exit_code}）${NC}"
+            fi
+            
+            # 解析常见错误并给出建议
+            local error_hint=""
+            if echo "$install_output" | grep -qi "INSTALL_FAILED_ALREADY_EXISTS\|INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then
+                error_hint="应用已安装且签名不兼容，请先卸载: adb uninstall <package_name>"
+            elif echo "$install_output" | grep -qi "INSTALL_FAILED_INSUFFICIENT_STORAGE"; then
+                error_hint="设备存储空间不足，请清理设备存储空间"
+            elif echo "$install_output" | grep -qi "INSTALL_FAILED_INVALID_APK"; then
+                error_hint="APK 文件损坏或格式不正确，请重新构建"
+            elif echo "$install_output" | grep -qi "INSTALL_FAILED_VERSION_DOWNGRADE"; then
+                error_hint="安装的版本低于已安装版本，请先卸载或使用 -d 参数允许降级: adb install -d -r <apk>"
+            elif echo "$install_output" | grep -qi "INSTALL_FAILED_PERMISSION_DENIED"; then
+                error_hint="权限被拒绝，请检查设备是否已授权 USB 调试"
+            elif echo "$install_output" | grep -qi "device.*not found\|no devices/emulators found"; then
+                error_hint="设备未连接或已断开，请检查 USB 连接和 adb 连接"
+            elif echo "$install_output" | grep -qi "INSTALL_PARSE_FAILED\|INSTALL_FAILED"; then
+                error_hint="APK 解析失败，可能是构建问题或 APK 文件损坏"
+            fi
+            
+            if [[ -n "$error_hint" ]]; then
+                echo ""
+                echo -e "${BOLD_YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo -e "${BOLD_YELLOW}  建议解决方案:${NC}"
+                echo -e "${BOLD_YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo -e "${YELLOW}  ${error_hint}${NC}"
+            fi
+            
+            echo -e "${BOLD_RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
             ((install_failed++))
         fi
         echo ""
@@ -1955,6 +2101,15 @@ _install_android_internal() {
     fi
     if [[ $install_failed -gt 0 ]]; then
         echo -e "${BOLD_RED}${CROSS_MARK} 安装失败 ${install_failed} 个 APK${NC}"
+        echo ""
+        echo -e "${BOLD_YELLOW}提示:${NC}"
+        echo -e "${YELLOW}  - 请检查上述错误详情和解决建议${NC}"
+        echo -e "${YELLOW}  - 如果问题持续，可以尝试:${NC}"
+        echo -e "${CYAN}    1. 检查设备连接: adb devices${NC}"
+        echo -e "${CYAN}    2. 重启 adb: adb kill-server && adb start-server${NC}"
+        echo -e "${CYAN}    3. 检查设备存储空间和权限${NC}"
+        echo -e "${CYAN}    4. 尝试手动安装: adb install -r <apk_path>${NC}"
+        echo ""
         return 1
     fi
     echo -e "${BLUE}========================================${NC}"
@@ -2017,6 +2172,43 @@ install_android() {
 
 # 清除缓存函数
 clean_cache() {
+    # 解析参数
+    local clean_android=true
+    local clean_ios=true
+    local clean_flutter=true
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -a|--android)
+                clean_android=true
+                clean_ios=false
+                clean_flutter=false
+                shift
+                ;;
+            -i|--ios)
+                clean_android=false
+                clean_ios=true
+                clean_flutter=false
+                shift
+                ;;
+            -f|--flutter)
+                clean_android=false
+                clean_ios=false
+                clean_flutter=true
+                shift
+                ;;
+            *)
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                echo -e "${YELLOW}用法: mt clean [-a|--android] [-i|--ios] [-f|--flutter]${NC}"
+                echo -e "${CYAN}  -a, --android   只清理 Android 缓存${NC}"
+                echo -e "${CYAN}  -i, --ios       只清理 iOS 缓存${NC}"
+                echo -e "${CYAN}  -f, --flutter   只清理 Flutter 缓存${NC}"
+                echo -e "${CYAN}  无参数          清理全部（Android + iOS + Flutter）${NC}"
+                return 1
+                ;;
+        esac
+    done
+    
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}  清除缓存${NC}"
     echo -e "${BLUE}========================================${NC}"
@@ -2024,49 +2216,41 @@ clean_cache() {
     
     local cleaned_count=0
     local failed_count=0
+    local step_num=1
+    local total_steps=0
+    
+    # 计算总步骤数
+    if [[ "$clean_flutter" == "true" ]]; then
+        ((total_steps++))
+    fi
+    if [[ "$clean_android" == "true" ]]; then
+        ((total_steps++))
+    fi
+    if [[ "$clean_ios" == "true" ]]; then
+        ((total_steps++))
+    fi
     
     # 清除 Flutter 缓存
-    echo -e "${CYAN}[1/3] 清除 Flutter 缓存...${NC}"
-    local flutter_dirs=(
-        "${PROJECT_ROOT}/plaud-flutter-cn/.dart_tool"
-        "${PROJECT_ROOT}/plaud-flutter-cn/.flutter-plugins"
-        "${PROJECT_ROOT}/plaud-flutter-cn/.flutter-plugins-dependencies"
-        "${PROJECT_ROOT}/plaud-flutter-cn/build"
-        "${PROJECT_ROOT}/plaud-flutter-global/.dart_tool"
-        "${PROJECT_ROOT}/plaud-flutter-global/.flutter-plugins"
-        "${PROJECT_ROOT}/plaud-flutter-global/.flutter-plugins-dependencies"
-        "${PROJECT_ROOT}/plaud-flutter-global/build"
-        "${PROJECT_ROOT}/plaud-flutter-common/.dart_tool"
-        "${PROJECT_ROOT}/plaud-flutter-common/.flutter-plugins"
-        "${PROJECT_ROOT}/plaud-flutter-common/.flutter-plugins-dependencies"
-        "${PROJECT_ROOT}/plaud-flutter-common/build"
-    )
-    
-    for dir in "${flutter_dirs[@]}"; do
-        if [[ -d "$dir" ]] || [[ -f "$dir" ]]; then
-            echo -e "${CYAN}  删除: ${dir}${NC}"
-            if rm -rf "$dir" 2>/dev/null; then
-                ((cleaned_count++))
-            else
-                echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
-                ((failed_count++))
-            fi
-        fi
-    done
-    
-    # 清除 Android 缓存
-    echo ""
-    echo -e "${CYAN}[2/3] 清除 Android 缓存...${NC}"
-    local android_dir="${PROJECT_ROOT}/plaud-android"
-    if [[ -d "$android_dir" ]]; then
-        local android_dirs=(
-            "${android_dir}/.gradle"
-            "${android_dir}/app/build"
-            "${android_dir}/build"
+    if [[ "$clean_flutter" == "true" ]]; then
+        echo -e "${CYAN}[${step_num}/${total_steps}] 清除 Flutter 缓存...${NC}"
+        ((step_num++))
+        local flutter_dirs=(
+            "${PROJECT_ROOT}/plaud-flutter-cn/.dart_tool"
+            "${PROJECT_ROOT}/plaud-flutter-cn/.flutter-plugins"
+            "${PROJECT_ROOT}/plaud-flutter-cn/.flutter-plugins-dependencies"
+            "${PROJECT_ROOT}/plaud-flutter-cn/build"
+            "${PROJECT_ROOT}/plaud-flutter-global/.dart_tool"
+            "${PROJECT_ROOT}/plaud-flutter-global/.flutter-plugins"
+            "${PROJECT_ROOT}/plaud-flutter-global/.flutter-plugins-dependencies"
+            "${PROJECT_ROOT}/plaud-flutter-global/build"
+            "${PROJECT_ROOT}/plaud-flutter-common/.dart_tool"
+            "${PROJECT_ROOT}/plaud-flutter-common/.flutter-plugins"
+            "${PROJECT_ROOT}/plaud-flutter-common/.flutter-plugins-dependencies"
+            "${PROJECT_ROOT}/plaud-flutter-common/build"
         )
         
-        for dir in "${android_dirs[@]}"; do
-            if [[ -d "$dir" ]]; then
+        for dir in "${flutter_dirs[@]}"; do
+            if [[ -d "$dir" ]] || [[ -f "$dir" ]]; then
                 echo -e "${CYAN}  删除: ${dir}${NC}"
                 if rm -rf "$dir" 2>/dev/null; then
                     ((cleaned_count++))
@@ -2076,48 +2260,77 @@ clean_cache() {
                 fi
             fi
         done
-    else
-        echo -e "${YELLOW}  跳过: Android 目录不存在${NC}"
+        echo ""
+    fi
+    
+    # 清除 Android 缓存
+    if [[ "$clean_android" == "true" ]]; then
+        echo -e "${CYAN}[${step_num}/${total_steps}] 清除 Android 缓存...${NC}"
+        ((step_num++))
+        local android_dir="${PROJECT_ROOT}/plaud-android"
+        if [[ -d "$android_dir" ]]; then
+            local android_dirs=(
+                "${android_dir}/.gradle"
+                "${android_dir}/app/build"
+                "${android_dir}/build"
+            )
+            
+            for dir in "${android_dirs[@]}"; do
+                if [[ -d "$dir" ]]; then
+                    echo -e "${CYAN}  删除: ${dir}${NC}"
+                    if rm -rf "$dir" 2>/dev/null; then
+                        ((cleaned_count++))
+                    else
+                        echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                        ((failed_count++))
+                    fi
+                fi
+            done
+        else
+            echo -e "${YELLOW}  跳过: Android 目录不存在${NC}"
+        fi
+        echo ""
     fi
     
     # 清除 iOS 缓存
-    echo ""
-    echo -e "${CYAN}[3/3] 清除 iOS 缓存...${NC}"
-    local ios_dir="${PROJECT_ROOT}/plaud-ios"
-    if [[ -d "$ios_dir" ]]; then
-        local ios_dirs=(
-            "${ios_dir}/PLAUD/build"
-            "${ios_dir}/Pods"
-            "${ios_dir}/DerivedData"
-        )
-        
-        for dir in "${ios_dirs[@]}"; do
-            if [[ -d "$dir" ]]; then
-                echo -e "${CYAN}  删除: ${dir}${NC}"
-                if rm -rf "$dir" 2>/dev/null; then
-                    ((cleaned_count++))
-                else
-                    echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
-                    ((failed_count++))
+    if [[ "$clean_ios" == "true" ]]; then
+        echo -e "${CYAN}[${step_num}/${total_steps}] 清除 iOS 缓存...${NC}"
+        local ios_dir="${PROJECT_ROOT}/plaud-ios"
+        if [[ -d "$ios_dir" ]]; then
+            local ios_dirs=(
+                "${ios_dir}/PLAUD/build"
+                "${ios_dir}/Pods"
+                "${ios_dir}/DerivedData"
+            )
+            
+            for dir in "${ios_dirs[@]}"; do
+                if [[ -d "$dir" ]]; then
+                    echo -e "${CYAN}  删除: ${dir}${NC}"
+                    if rm -rf "$dir" 2>/dev/null; then
+                        ((cleaned_count++))
+                    else
+                        echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                        ((failed_count++))
+                    fi
                 fi
+            done
+            
+            # 清除 Xcode DerivedData（如果存在）
+            local xcode_derived_data="${HOME}/Library/Developer/Xcode/DerivedData"
+            if [[ -d "$xcode_derived_data" ]]; then
+                echo -e "${CYAN}  清除 Xcode DerivedData...${NC}"
+                # 只清除与项目相关的 DerivedData（可选，因为可能影响其他项目）
+                # 这里我们只提示，不自动删除整个 DerivedData
+                echo -e "${YELLOW}  提示: Xcode DerivedData 位于 ${xcode_derived_data}${NC}"
+                echo -e "${YELLOW}  如需清除，请手动删除或使用 Xcode 的 Product > Clean Build Folder${NC}"
             fi
-        done
-        
-        # 清除 Xcode DerivedData（如果存在）
-        local xcode_derived_data="${HOME}/Library/Developer/Xcode/DerivedData"
-        if [[ -d "$xcode_derived_data" ]]; then
-            echo -e "${CYAN}  清除 Xcode DerivedData...${NC}"
-            # 只清除与项目相关的 DerivedData（可选，因为可能影响其他项目）
-            # 这里我们只提示，不自动删除整个 DerivedData
-            echo -e "${YELLOW}  提示: Xcode DerivedData 位于 ${xcode_derived_data}${NC}"
-            echo -e "${YELLOW}  如需清除，请手动删除或使用 Xcode 的 Product > Clean Build Folder${NC}"
+        else
+            echo -e "${YELLOW}  跳过: iOS 目录不存在${NC}"
         fi
-    else
-        echo -e "${YELLOW}  跳过: iOS 目录不存在${NC}"
+        echo ""
     fi
     
     # 汇总结果
-    echo ""
     echo -e "${BLUE}========================================${NC}"
     if [[ $cleaned_count -gt 0 ]]; then
         echo -e "${GREEN}${CHECK_MARK} 成功清除 ${cleaned_count} 个缓存目录${NC}"
@@ -4145,7 +4358,8 @@ main() {
             delete_branches "$@"
             ;;
         clean)
-            clean_cache
+            shift
+            clean_cache "$@"
             ;;
         prebuild)
             prebuild
@@ -4194,6 +4408,35 @@ main() {
             ;;
         go)
             # 如果没有指定市场，默认为 global
+            if [[ -z "${2:-}" ]] || [[ "${2}" =~ ^- ]]; then
+                # 没有指定市场，使用默认 global
+                shift
+                go_android "global" "$@"
+            else
+                # 指定了市场
+                shift
+                go_android "$@"
+            fi
+            ;;
+        rebuild)
+            # rebuild 命令：执行 clean + go
+            echo -e "${BLUE}========================================${NC}"
+            echo -e "${BLUE}  执行 rebuild（清理缓存 + 重新构建）${NC}"
+            echo -e "${BLUE}========================================${NC}"
+            echo ""
+            
+            # 第一步：清理缓存（清理全部）
+            echo -e "${CYAN}[1/2] 清理缓存...${NC}"
+            echo ""
+            if ! clean_cache; then
+                echo -e "${BOLD_RED}错误: 清理缓存失败${NC}"
+                exit 1
+            fi
+            echo ""
+            
+            # 第二步：执行 go 命令（如果没有指定市场，默认为 global）
+            echo -e "${CYAN}[2/2] 重新构建...${NC}"
+            echo ""
             if [[ -z "${2:-}" ]] || [[ "${2}" =~ ^- ]]; then
                 # 没有指定市场，使用默认 global
                 shift
@@ -4543,7 +4786,7 @@ main() {
                 echo ""
                 echo -e "${YELLOW}支持的命令:${NC}"
                 echo -e "${CYAN}  工具命令: list, init, config, set-github-token, delete, clean, upgrade${NC}"
-                echo -e "${CYAN}  构建命令: prebuild, build, install, install:ios, build:check, build:ios${NC}"
+                echo -e "${CYAN}  构建命令: prebuild, build, install, install:ios, build:check, build:ios, go, rebuild${NC}"
                 echo -e "${CYAN}  Plaud 工具: plaud${NC}"
                 echo -e "${CYAN}  PR 命令: pr${NC}"
                 echo -e "${CYAN}  Git 命令: ${supported_git_commands[*]}${NC}"

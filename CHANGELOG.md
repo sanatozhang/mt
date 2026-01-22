@@ -5,6 +5,33 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.4.0] - 2025-01-16
+
+### 新增功能
+
+#### Status 命令彩色输出
+- `mt status` 命令现在支持彩色输出，颜色与 `git status` 完全一致
+- 不同状态使用不同颜色：
+  - 青色/蓝色：分支信息（`On branch ...`）
+  - 绿色：已暂存的更改（`Changes to be committed:`、`new file:`、`nothing to commit`）
+  - 红色：未暂存的更改（`Changes not staged for commit:`、`modified:`、`deleted:`、`Untracked files:`）
+  - 黄色：提示信息（`Your branch is ahead/behind...`、`no changes added to commit`、`renamed:`）
+- 自动识别文件状态码（`M  file`、` M file`、`?? file` 等）并应用相应颜色
+- `status` 命令不再显示额外的"执行成功"提示，输出更简洁
+
+### 改进
+
+#### 缓存目录权限处理优化
+- 修复了在某些环境下无法创建缓存目录（`~/.cache/mt`）导致的权限错误
+- 如果无法创建缓存目录，会静默跳过版本检查，不影响主功能
+- 版本检查失败不会中断命令执行，提升工具稳定性
+
+### 修复
+
+#### 错误处理改进
+- 修复了缓存目录创建失败时显示错误信息的问题
+- 改进了错误处理逻辑，确保工具在权限受限环境下也能正常工作
+
 ## [1.2.0] - 2024-12-18
 
 ### 新增功能

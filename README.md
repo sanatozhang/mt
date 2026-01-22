@@ -70,7 +70,7 @@ export PATH="/path/to/mt/bin:$PATH"
    
    # 使用工具
    mt checkout -b feature/new-feature  # 所有仓库切换分支
-   mt status                            # 查看所有仓库状态
+   mt status                            # 查看所有仓库状态（彩色输出，与 git status 一致）
    mt build cn -r                       # 构建 CN release 包
    mt install global                    # 构建并安装到设备
    ```
