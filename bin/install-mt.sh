@@ -152,7 +152,6 @@ fi
 # 如果是远程执行，BIN_DIR 应该是 ${install_dir}/bin
 # 如果 bin 目录不存在，从父目录创建
 if [[ ! -d "$BIN_DIR" ]]; then
-    local parent_dir
     parent_dir="$(dirname "$BIN_DIR")"
     if [[ -d "$parent_dir" ]]; then
         # 父目录存在，创建 bin 目录
@@ -261,21 +260,30 @@ install_user_path() {
     if [[ -L "$link_path" ]]; then
         rm "$link_path"
     fi
-    ln -sf "$MT_SCRIPT" "$link_path"
+    if ! ln -sf "$MT_SCRIPT" "$link_path"; then
+        echo -e "${RED}错误: 无法创建符号链接: ${link_path}${NC}"
+        return 1
+    fi
     
-    # 检查 PATH 是否已包含
-    if [[ ":$PATH:" != *":${bin_dir}:"* ]]; then
-        # 添加到 Shell 配置
+    # 检查配置文件中是否已包含 .local/bin 的 PATH 配置
+    local path_added=false
+    if ! grep -q "\.local/bin" "$config_file" 2>/dev/null; then
+        # 配置文件中没有，添加 PATH 配置
         local export_line="export PATH=\"\${PATH}:${bin_dir}\""
-        
-        # 检查是否已存在
-        if ! grep -q "\.local/bin" "$config_file" 2>/dev/null; then
-            echo "" >> "$config_file"
-            echo "# MT Tool" >> "$config_file"
-            echo "$export_line" >> "$config_file"
-            echo -e "${GREEN}✓ 已添加到 ${config_file}${NC}"
-        else
-            echo -e "${YELLOW}⚠  PATH 配置已存在${NC}"
+        echo "" >> "$config_file"
+        echo "# MT Tool" >> "$config_file"
+        echo "$export_line" >> "$config_file"
+        echo -e "${GREEN}✓ 已添加到 ${config_file}${NC}"
+        path_added=true
+    else
+        echo -e "${YELLOW}⚠  PATH 配置已存在（可能由其他工具添加）${NC}"
+        path_added=true
+    fi
+    
+    # 检查当前 PATH 是否包含（用于提示）
+    if [[ ":$PATH:" != *":${bin_dir}:"* ]]; then
+        if [[ "$path_added" == "true" ]]; then
+            echo -e "${YELLOW}⚠  当前 PATH 中不包含 ${bin_dir}，需要重新加载配置${NC}"
         fi
     fi
     
@@ -300,7 +308,45 @@ main() {
     shell_type=$(detect_shell)
     echo -e "${BLUE}检测到 Shell: ${shell_type}${NC}"
     
-    # 尝试系统级安装
+    # 检测是否是远程执行（远程执行时跳过系统级安装，直接使用用户级安装）
+    local is_remote=false
+    if [[ ! -f "${BASH_SOURCE[0]:-$0}" ]] || [[ "${BASH_SOURCE[0]:-$0}" == *"/dev/fd/"* ]] || [[ "${BASH_SOURCE[0]:-$0}" == *"/tmp/"* ]]; then
+        is_remote=true
+    elif [[ -f "${BASH_SOURCE[0]:-$0}" ]]; then
+        local script_dir
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || true
+        if [[ -n "$script_dir" ]] && [[ ! -f "${script_dir}/mt" ]]; then
+            is_remote=true
+        fi
+    fi
+    
+    # 如果是远程执行，直接使用用户级安装（不需要密码）
+    if [[ "$is_remote" == "true" ]]; then
+        echo -e "${BLUE}检测到远程安装，使用用户级安装（无需密码）...${NC}"
+        echo ""
+        
+        if install_user_path "$shell_type"; then
+            echo ""
+            echo -e "${GREEN}========================================${NC}"
+            echo -e "${GREEN}  安装成功！${NC}"
+            echo -e "${GREEN}========================================${NC}"
+            echo ""
+            echo -e "${BLUE}请运行以下命令使配置生效:${NC}"
+            local config_file
+            config_file=$(get_shell_config "$shell_type")
+            echo -e "${CYAN}  source ${config_file}${NC}"
+            echo ""
+            echo -e "${BLUE}然后可以使用 mt 命令:${NC}"
+            echo -e "${CYAN}  mt --version${NC}"
+            echo -e "${CYAN}  mt help${NC}"
+        else
+            echo -e "${RED}安装失败${NC}"
+            exit 1
+        fi
+        return 0
+    fi
+    
+    # 本地执行：尝试系统级安装（需要密码）
     if install_system_wide; then
         echo ""
         echo -e "${GREEN}========================================${NC}"

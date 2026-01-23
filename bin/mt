@@ -81,7 +81,7 @@ CROSS_MARK="✗"
 ARROW="→"
 
 # 版本号
-VERSION="1.4.0"
+VERSION="1.4.1"
 
 # GitHub 仓库信息（用于版本检查）
 GITHUB_REPO="sanatozhang/mt"
@@ -737,7 +737,7 @@ check_repo_has_changes() {
         if [[ -z "$push_remote" ]]; then
             push_remote="origin"
             if ! (cd "$repo_path" && git remote | grep -q "^${push_remote}$" 2>/dev/null); then
-                # 如果没有 origin，使用第一个远程
+            # 如果没有 origin，使用第一个远程
                 push_remote=$(cd "$repo_path" && git remote | head -1)
             fi
         fi
@@ -1819,13 +1819,13 @@ _build_android_internal() {
             return 1
         }
     else
-        echo -e "${CYAN}执行任务: ./gradlew clean ${gradle_task}${NC}"
-        # 打印执行的命令
-        print_command "$android_dir" ./gradlew clean "$gradle_task" --stacktrace
-        (cd "$android_dir" && ./gradlew clean "$gradle_task" --stacktrace 2>&1) || {
+    echo -e "${CYAN}执行任务: ./gradlew clean ${gradle_task}${NC}"
+    # 打印执行的命令
+    print_command "$android_dir" ./gradlew clean "$gradle_task" --stacktrace
+    (cd "$android_dir" && ./gradlew clean "$gradle_task" --stacktrace 2>&1) || {
             echo -e "${BOLD_RED}${CROSS_MARK} Gradle 构建失败${NC}"
-            return 1
-        }
+        return 1
+    }
     fi
     echo ""
     
@@ -3747,8 +3747,8 @@ EOF
             echo -e "${CYAN}  ${body}${NC}" >&2
         else
             echo -e "${YELLOW}错误详情:${NC}" >&2
-            echo -e "${RED}  ${body}${NC}" >&2
-        fi
+                echo -e "${RED}  ${body}${NC}" >&2
+            fi
         return 1
     else
         # 处理其他 HTTP 状态码
@@ -4034,11 +4034,11 @@ create_prs() {
                 echo -e "${YELLOW}  PR 以远程分支为准，请先推送当前分支到远程后再创建 PR:${NC}"
                 echo -e "${CYAN}    git push origin ${current_branch}${NC}"
                 echo -e "${CYAN}    （如执行过 rebase/amend，推荐使用 --force-with-lease）${NC}"
-                pr_status_names+=("$name")
-                pr_status_values+=("需要先推送")
+                    pr_status_names+=("$name")
+                    pr_status_values+=("需要先推送")
                 echo ""
-                continue
-            fi
+                    continue
+                fi
             
             # 本地也没有代码变更，才跳过
             echo -e "${YELLOW}  ⏭  跳过: 没有相对于 ${target_branch} 的代码变更${NC}"
@@ -4122,7 +4122,7 @@ create_prs() {
                     echo -e "${RED}  ${CROSS_MARK} PR 创建失败（退出码: ${pr_exit_code}）${NC}"
                     echo -e "${YELLOW}  提示: 请检查网络连接、GitHub token 权限和分支状态${NC}"
                 else
-                    echo -e "${RED}  ${CROSS_MARK} PR 创建失败（见上方错误信息）${NC}"
+                echo -e "${RED}  ${CROSS_MARK} PR 创建失败（见上方错误信息）${NC}"
                 fi
             fi
         fi
@@ -4778,8 +4778,8 @@ main() {
                     # 只是简单的命令替换
                     set -- "$actual_cmd" "${@:2}"
                 fi
-                # 执行 Git 命令
-                run_command "$@"
+            # 执行 Git 命令
+            run_command "$@"
             else
                 # 不支持的命令，显示错误提示
                 echo -e "${BOLD_RED}错误: 不支持的命令: ${first_arg}${NC}"

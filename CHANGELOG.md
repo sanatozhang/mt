@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.4.1] - 2025-01-16
+
+### 修复
+
+#### 安装脚本语法错误修复
+- 修复了脚本顶层作用域使用 `local` 关键字导致的语法错误（`local: can only be used in a function`）
+- 将顶层作用域的 `local parent_dir` 改为普通变量声明 `parent_dir`
+
+#### 远程安装环境变量修复
+- **关键修复**：修复了通过 `curl | bash` 方式安装时，mt 工具没有添加到环境变量的问题
+- 远程执行时，自动跳过系统级安装（需要密码），直接使用用户级安装（无需密码）
+- 修复了 `install_user_path()` 函数的 PATH 检查逻辑：
+  - 无论当前 PATH 是否包含 `.local/bin`，都会检查配置文件并添加（如果不存在）
+  - 确保 PATH 配置能够持久化到 Shell 配置文件（`.zshrc` 或 `.bashrc`）
+- 改进了符号链接创建的错误处理，确保安装过程不会静默失败
+- 添加了更清晰的提示信息，告知用户需要重新加载配置或重新打开终端
+
 ## [1.4.0] - 2025-01-16
 
 ### 新增功能
