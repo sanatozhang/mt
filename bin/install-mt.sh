@@ -123,7 +123,7 @@ clone_repository() {
 
 # 获取脚本所在目录
 get_script_dir() {
-    local script_path="${BASH_SOURCE[0]}"
+    local script_path="${BASH_SOURCE[0]:-$0}"
     
     # 如果是远程执行，返回克隆的目录
     if is_remote_execution; then
@@ -142,7 +142,33 @@ get_script_dir() {
 
 # 初始化路径变量
 BIN_DIR=$(get_script_dir)
-MT_DIR="$(cd "${BIN_DIR}/.." && pwd)"
+
+# 验证 BIN_DIR 是否有效
+if [[ -z "$BIN_DIR" ]]; then
+    echo -e "${RED}错误: 无法确定脚本目录${NC}"
+    exit 1
+fi
+
+# 如果是远程执行，BIN_DIR 应该是 ${install_dir}/bin
+# 如果 bin 目录不存在，从父目录创建
+if [[ ! -d "$BIN_DIR" ]]; then
+    local parent_dir
+    parent_dir="$(dirname "$BIN_DIR")"
+    if [[ -d "$parent_dir" ]]; then
+        # 父目录存在，创建 bin 目录
+        mkdir -p "$BIN_DIR" 2>/dev/null || {
+            echo -e "${RED}错误: 无法创建目录: ${BIN_DIR}${NC}"
+            exit 1
+        }
+    else
+        echo -e "${RED}错误: 父目录不存在: ${parent_dir}${NC}"
+        echo -e "${YELLOW}请检查克隆是否成功${NC}"
+        exit 1
+    fi
+fi
+
+# 安全地获取 MT_DIR（即使 bin 目录不存在，也能获取父目录）
+MT_DIR="$(cd "$(dirname "$BIN_DIR")" && pwd)"
 MT_SCRIPT="${BIN_DIR}/mt"
 
 # 检查 mt 脚本是否存在

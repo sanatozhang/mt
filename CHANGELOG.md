@@ -34,8 +34,15 @@
 
 #### BASH_SOURCE 未定义变量错误修复
 - 修复了在 `set -u` 模式下访问 `BASH_SOURCE[0]` 和 `BASH_SOURCE[1]` 时可能出现的 "unbound variable" 错误
-- 所有 `BASH_SOURCE` 访问现在都使用安全的默认值（`${BASH_SOURCE[0]:-$0}` 和 `${BASH_SOURCE[1]:-}`）
-- 确保脚本在各种执行环境下（直接执行、source、符号链接等）都能正常工作
+- 修复了 `bin/mt` 和 `bin/install-mt.sh` 中所有 `BASH_SOURCE` 访问，使用安全的默认值（`${BASH_SOURCE[0]:-$0}` 和 `${BASH_SOURCE[1]:-}`）
+- 确保脚本在各种执行环境下（直接执行、source、符号链接、curl 远程执行等）都能正常工作
+- 特别修复了通过 `curl | bash` 方式执行安装脚本时的错误
+
+#### 安装脚本路径处理修复
+- 修复了远程执行安装脚本时，`bin` 目录不存在导致的路径错误（`No such file or directory`）
+- 改进了路径验证逻辑，在目录不存在时自动创建或提供清晰的错误提示
+- 使用更安全的路径计算方法（`dirname` 替代 `..`），避免路径解析错误
+- 确保克隆仓库后能正确识别和访问 `bin` 目录
 
 ## [1.2.0] - 2024-12-18
 
