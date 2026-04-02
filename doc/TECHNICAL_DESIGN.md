@@ -45,7 +45,7 @@ repositories:
 
 #### 配置解析
 - 使用纯 Shell 脚本解析 YAML（避免外部依赖）
-- 支持从 `.gitmodules` 自动生成配置（`mt init` 命令）
+- 配置文件由命令执行时按需自动生成，`mt init` 负责初始化开发环境
 
 ### 3.2 命令执行流程
 
@@ -93,7 +93,7 @@ repositories:
 
 #### 工具命令
 - `mt list` - 列出所有仓库
-- `mt init` - 初始化配置（优先从 mt 仓库复制，不存在则生成默认配置）
+- `mt init` - 检查 Homebrew/FVM、安装 Flutter 3.38.9，并执行仓库克隆
 - `mt config` - 编辑配置
 - `mt delete [-a]` - 删除本地分支（默认删除3个最旧分支，-a 删除所有）
 - `mt clean` - 清除 Flutter、Android、iOS 缓存
@@ -411,4 +411,3 @@ MT 工具通过统一的命令行接口，简化了多仓库 Git 操作流程。
 - ✅ 易于扩展
 - ✅ 输出清晰
 - ✅ 错误处理完善
-

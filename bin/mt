@@ -81,11 +81,27 @@ CROSS_MARK="✗"
 ARROW="→"
 
 # 版本号
-VERSION="1.4.1"
+VERSION="1.4.2"
 
 # GitHub 仓库信息（用于版本检查）
 GITHUB_REPO="sanatozhang/mt"
 GITHUB_BRANCH="main"
+
+# 默认仓库列表（固定 7 个）
+DEFAULT_REPOSITORIES=(
+    "plaud-flutter-cn|plaud-flutter-cn|git@github.com:Plaud-AI/plaud-flutter-cn.git"
+    "plaud-flutter-global|plaud-flutter-global|git@github.com:Plaud-AI/plaud-flutter-global.git"
+    "plaud-flutter-common|plaud-flutter-common|git@github.com:Plaud-AI/plaud-flutter-common.git"
+    "plaud-android|plaud-android|git@github.com:Plaud-AI/plaud-android.git"
+    "plaud-ios|plaud-ios|git@github.com:Plaud-AI/plaud-ios.git"
+    "nicebuildSDK|plaud-android/nicebuildSDK|git@github.com:Plaud-AI/ble-sdk-android.git"
+    "PenSubmodules|plaud-ios/PLAUD/PenSubmodules|git@github.com:Plaud-AI/ios-lib-nicebuild-blepen.git"
+)
+
+FVM_BREW_TAP="leoafarias/fvm"
+FVM_FLUTTER_VERSION="3.38.9"
+PLAUD_APP_REPO_URL="git@github.com:Plaud-AI/Plaud-App.git"
+PLAUD_APP_DEFAULT_DIR="Plaud-App"
 
 # 检查远程版本更新（带缓存，避免频繁检查）
 check_version_update() {
@@ -291,6 +307,20 @@ find_project_root() {
 PROJECT_ROOT="$(find_project_root "$(pwd)")"
 CONFIG_FILE="${PROJECT_ROOT}/.mt-config.yaml"
 
+# 写入默认配置文件
+write_default_config() {
+    local target_config="$1"
+    {
+        echo "repositories:"
+        for repo_info in "${DEFAULT_REPOSITORIES[@]}"; do
+            IFS='|' read -r name path url <<< "$repo_info"
+            echo "  - name: ${name}"
+            echo "    path: ${path}"
+            echo "    url: ${url}"
+        done
+    } > "$target_config"
+}
+
 # 检查配置文件是否存在，如果不存在则自动从 mt 仓库复制
 check_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -307,24 +337,7 @@ check_config() {
         
         # 如果 mt 仓库中也没有配置文件，生成默认配置
         echo -e "${YELLOW}配置文件不存在，正在生成默认配置...${NC}"
-        cat > "$CONFIG_FILE" << 'EOF'
-repositories:
-  - name: plaud-flutter-cn
-    path: plaud-flutter-cn
-    url: git@github.com:Plaud-AI/plaud-flutter-cn.git
-  - name: plaud-flutter-global
-    path: plaud-flutter-global
-    url: git@github.com:Plaud-AI/plaud-flutter-global.git
-  - name: plaud-flutter-common
-    path: plaud-flutter-common
-    url: git@github.com:Plaud-AI/plaud-flutter-common.git
-  - name: plaud-android
-    path: plaud-android
-    url: git@github.com:Plaud-AI/plaud-android.git
-  - name: plaud-ios
-    path: plaud-ios
-    url: git@github.com:Plaud-AI/plaud-ios.git
-EOF
+        write_default_config "$CONFIG_FILE"
         echo -e "${GREEN}${CHECK_MARK} 默认配置文件已生成: ${CONFIG_FILE}${NC}"
         echo -e "${YELLOW}提示: 你可以编辑配置文件来添加或修改仓库${NC}"
         echo ""
@@ -391,7 +404,32 @@ get_repositories() {
     while IFS= read -r line; do
         repos+=("$line")
     done < <(parse_config)
+
+    # 补齐默认仓库，确保所有机器默认都是 7 个仓库
+    for default_repo in "${DEFAULT_REPOSITORIES[@]}"; do
+        IFS='|' read -r _ default_path _ <<< "$default_repo"
+        local already_exists=false
+
+        for repo in "${repos[@]}"; do
+            IFS='|' read -r _ repo_path _ <<< "$repo"
+            if [[ "$repo_path" == "$default_path" ]]; then
+                already_exists=true
+                break
+            fi
+        done
+
+        if [[ "$already_exists" == "false" ]]; then
+            repos+=("$default_repo")
+        fi
+    done
+
     echo "${repos[@]}"
+}
+
+# 判断路径是否是 Git 仓库（支持普通仓库和 Submodule）
+is_git_repository_path() {
+    local repo_path="$1"
+    [[ -d "$repo_path" ]] && { [[ -d "${repo_path}/.git" ]] || [[ -f "${repo_path}/.git" ]]; }
 }
 
 # 打印执行的命令
@@ -471,8 +509,11 @@ format_output() {
                     continue
                 fi
                 
+                # "没有变化" - 使用绿色
+                if [[ "$line" == "没有变化" ]]; then
+                    echo -e "  ${GREEN}${line}${NC}"
                 # "On branch ..." - 使用青色/蓝色
-                if [[ "$line" =~ ^On\ branch ]]; then
+                elif [[ "$line" =~ ^On\ branch ]]; then
                     echo -e "  ${CYAN}${line}${NC}"
                 # "Changes to be committed:" - 使用绿色
                 elif [[ "$line" =~ ^Changes\ to\ be\ committed ]]; then
@@ -858,7 +899,7 @@ run_command() {
     
     check_config
     
-    # 获取仓库列表
+    # 获取仓库列表（默认固定 7 个，未初始化仓库执行时自动跳过）
     local repos_array
     read -ra repos_array <<< "$(get_repositories)"
     
@@ -887,6 +928,24 @@ run_command() {
         local output
         local exit_code
         local repo_path="${PROJECT_ROOT}/$(echo "$repo_info" | cut -d'|' -f2)"
+
+        if [[ ! -d "$repo_path" ]]; then
+            echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
+            echo -e "${YELLOW}  ⏭  跳过: 路径不存在 ${path}${NC}"
+            echo ""
+            ((skipped_count++))
+            skipped_repos+=("$name")
+            continue
+        fi
+
+        if ! is_git_repository_path "$repo_path"; then
+            echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
+            echo -e "${YELLOW}  ⏭  跳过: 不是 Git 仓库 ${path}${NC}"
+            echo ""
+            ((skipped_count++))
+            skipped_repos+=("$name")
+            continue
+        fi
         
         # 对于 commit / push / diff 命令，按需跳过没有变化的仓库
         if [[ "${git_args[0]}" == "commit" ]]; then
@@ -902,8 +961,10 @@ run_command() {
             # git diff 默认返回 0（即使有 diff），因此用 --quiet 做差异探测
             # exit code: 0=无差异, 1=有差异, 其他=错误（交给后续 execute_git_command 输出错误信息）
             local diff_probe_exit=0
+            set +e
             (cd "$repo_path" && git diff --quiet "${git_args[@]:1}" 2>/dev/null)
             diff_probe_exit=$?
+            set -e
             
             if [[ $diff_probe_exit -eq 0 ]]; then
                 echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
@@ -915,11 +976,28 @@ run_command() {
             fi
         fi
         
+        # status 命令：如果没有改动，直接提示“没有变化”
+        local status_clean=false
+        if [[ "${git_args[0]}" == "status" ]]; then
+            if [[ -d "$repo_path" ]] && { [[ -d "${repo_path}/.git" ]] || [[ -f "${repo_path}/.git" ]]; }; then
+                local status_porcelain
+                status_porcelain=$(cd "$repo_path" && git status --porcelain 2>/dev/null)
+                if [[ -z "$status_porcelain" ]]; then
+                    status_clean=true
+                fi
+            fi
+        fi
+        
         # 先打印命令（在捕获输出之前）
         print_command "$repo_path" git "${git_args[@]}"
         
         # 执行命令并捕获输出
+        if [[ "$status_clean" == "true" ]]; then
+            output="没有变化"
+            exit_code=0
+        else
         output=$(execute_git_command "$repo_info" "${git_args[@]}" 2>&1) || exit_code=$?
+        fi
         
         if [[ ${exit_code:-0} -eq 0 ]]; then
             ((success_count++))
@@ -932,54 +1010,8 @@ run_command() {
         unset exit_code
     done
     
-    # 如果是分支相关命令，还需要在子仓库中执行
-    local subrepo_count=0
-    if is_branch_related_command "${git_args[0]}"; then
-        local subrepos=(
-            "plaud-android/nicebuildSDK|nicebuildSDK"
-            "plaud-ios/PLAUD/PenSubmodules|PenSubmodules"
-        )
-        
-        for subrepo_info in "${subrepos[@]}"; do
-            IFS='|' read -r subrepo_path subrepo_name <<< "$subrepo_info"
-            local full_path="${PROJECT_ROOT}/${subrepo_path}"
-            
-            # 检查子仓库是否存在
-            if [[ ! -d "$full_path" ]]; then
-                continue
-            fi
-            
-            # 检查是否是 Git 仓库
-            if [[ ! -d "${full_path}/.git" ]] && [[ ! -f "${full_path}/.git" ]]; then
-                continue
-            fi
-            
-            # 计数子仓库（用于统计）
-            ((subrepo_count++))
-            
-            # 执行子仓库命令
-            echo ""
-            echo -e "${BOLD_CYAN}[子仓库] ${subrepo_name}${NC}"
-            print_command "$full_path" git "${git_args[@]}"
-            
-            local subrepo_output
-            local subrepo_exit_code
-            subrepo_output=$(execute_subrepo_command "$full_path" "$subrepo_name" "${git_args[@]}" 2>&1) || subrepo_exit_code=$?
-            
-            if [[ ${subrepo_exit_code:-0} -eq 0 ]]; then
-                ((success_count++))
-                format_output "子" "子" "$subrepo_name" "0" "$subrepo_output" "${git_args[@]}"
-            else
-                failed_repos+=("${subrepo_name}(子仓库)")
-                format_output "子" "子" "$subrepo_name" "1" "$subrepo_output" "${git_args[@]}"
-            fi
-            
-            unset subrepo_exit_code
-        done
-    fi
-    
-    # 计算实际处理的仓库总数（主仓库 + 子仓库）
-    local actual_total=$((total - skipped_count + subrepo_count))
+    # 计算实际处理的仓库总数
+    local actual_total=$((total - skipped_count))
     
     # 汇总结果 - 使用加粗颜色让总结更明显
     echo ""
@@ -1005,7 +1037,7 @@ run_command() {
         echo -e "${YELLOW}⏭  所有仓库都没有修改，已跳过${NC}"
         return 0
     else
-        local actual_total=$((total - skipped_count + subrepo_count))
+        local actual_total=$((total - skipped_count))
         echo -e "${BOLD_GREEN}${CHECK_MARK} 所有仓库执行成功 (${success_count}/${actual_total})${NC}"
         return 0
     fi
@@ -1023,7 +1055,7 @@ list_repositories() {
         exit 1
     fi
     
-    echo -e "${BLUE}配置的仓库列表:${NC}"
+    echo -e "${BLUE}仓库列表（含默认 7 仓库）:${NC}"
     echo ""
     
     for i in "${!repos_array[@]}"; do
@@ -1056,7 +1088,7 @@ list_repositories() {
     done
 }
 
-# 初始化配置文件
+# 初始化默认配置文件（内部保留，用于按需重建配置）
 init_config() {
     local target_config="${PROJECT_ROOT}/.mt-config.yaml"
     local mt_config="${MT_DIR}/.mt-config.yaml"
@@ -1084,27 +1116,218 @@ init_config() {
     echo -e "${BLUE}生成默认配置文件...${NC}"
     
     # 创建配置文件（使用默认的仓库配置）
-    cat > "$target_config" << 'EOF'
-repositories:
-  - name: plaud-flutter-cn
-    path: plaud-flutter-cn
-    url: git@github.com:Plaud-AI/plaud-flutter-cn.git
-  - name: plaud-flutter-global
-    path: plaud-flutter-global
-    url: git@github.com:Plaud-AI/plaud-flutter-global.git
-  - name: plaud-flutter-common
-    path: plaud-flutter-common
-    url: git@github.com:Plaud-AI/plaud-flutter-common.git
-  - name: plaud-android
-    path: plaud-android
-    url: git@github.com:Plaud-AI/plaud-android.git
-  - name: plaud-ios
-    path: plaud-ios
-    url: git@github.com:Plaud-AI/plaud-ios.git
-EOF
+    write_default_config "$target_config"
     
     echo -e "${GREEN}${CHECK_MARK} 配置文件已生成: ${target_config}${NC}"
     echo -e "${YELLOW}提示: 你可以编辑配置文件来添加或修改仓库${NC}"
+}
+
+find_brew_bin() {
+    if command -v brew >/dev/null 2>&1; then
+        command -v brew
+        return 0
+    fi
+
+    local candidates=(
+        "/opt/homebrew/bin/brew"
+        "/usr/local/bin/brew"
+        "/home/linuxbrew/.linuxbrew/bin/brew"
+    )
+
+    local candidate=""
+    for candidate in "${candidates[@]}"; do
+        if [[ -x "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+find_fvm_bin() {
+    local brew_bin="${1:-}"
+
+    if command -v fvm >/dev/null 2>&1; then
+        command -v fvm
+        return 0
+    fi
+
+    if [[ -n "$brew_bin" ]]; then
+        local brew_prefix=""
+        brew_prefix=$("$brew_bin" --prefix 2>/dev/null || echo "")
+        if [[ -n "$brew_prefix" ]] && [[ -x "${brew_prefix}/bin/fvm" ]]; then
+            echo "${brew_prefix}/bin/fvm"
+            return 0
+        fi
+    fi
+
+    local candidates=(
+        "/opt/homebrew/bin/fvm"
+        "/usr/local/bin/fvm"
+        "/home/linuxbrew/.linuxbrew/bin/fvm"
+    )
+
+    local candidate=""
+    for candidate in "${candidates[@]}"; do
+        if [[ -x "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+clone_plaud_app() {
+    local target_dir="${1:-$PLAUD_APP_DEFAULT_DIR}"
+
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  开始克隆 Plaud-App 仓库${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    echo -e "${CYAN}仓库地址: ${PLAUD_APP_REPO_URL}${NC}"
+    echo -e "${CYAN}目标目录: ${target_dir}${NC}"
+    echo ""
+
+    if [[ -d "$target_dir" ]]; then
+        echo -e "${BOLD_YELLOW}警告: 目录 ${target_dir} 已存在${NC}"
+        echo -e "${YELLOW}是否要继续？(y/N)${NC}"
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}已取消${NC}"
+            return 0
+        fi
+    fi
+
+    echo -e "${BLUE}[1/3] 克隆主仓库...${NC}"
+    print_command "$(pwd)" git clone "$PLAUD_APP_REPO_URL" "$target_dir"
+
+    if ! git clone "$PLAUD_APP_REPO_URL" "$target_dir" 2>&1; then
+        echo -e "${BOLD_RED}${CROSS_MARK} 克隆失败${NC}"
+        return 1
+    fi
+
+    echo ""
+    echo -e "${GREEN}${CHECK_MARK} 主仓库克隆成功${NC}"
+    echo ""
+
+    echo -e "${BLUE}[2/3] 初始化子模块...${NC}"
+    echo -e "${CYAN}执行: git submodule update --init --recursive${NC}"
+    echo ""
+
+    local submodule_output=""
+    if ! submodule_output=$(cd "$target_dir" && git submodule update --init --recursive 2>&1); then
+        echo -e "${BOLD_RED}${CROSS_MARK} 子模块初始化失败${NC}"
+        echo -e "${YELLOW}输出:${NC}"
+        echo "$submodule_output" | sed 's/^/  /'
+        echo ""
+        echo -e "${BOLD_YELLOW}警告: 主仓库已克隆成功，但子模块初始化失败${NC}"
+        echo -e "${YELLOW}你可以稍后手动执行: cd ${target_dir} && git submodule update --init --recursive${NC}"
+        return 1
+    fi
+
+    if [[ -n "$submodule_output" ]]; then
+        echo "$submodule_output" | sed 's/^/  /'
+    fi
+
+    echo ""
+    echo -e "${GREEN}${CHECK_MARK} 子模块初始化成功${NC}"
+    echo ""
+
+    echo -e "${BLUE}[3/3] 克隆 Android 子仓库...${NC}"
+    local android_subrepo_path="${target_dir}/plaud-android/nicebuildSDK"
+    local android_subrepo_url="git@github.com:Plaud-AI/ble-sdk-android.git"
+
+    if [[ ! -d "${target_dir}/plaud-android" ]]; then
+        echo -e "${BOLD_YELLOW}警告: plaud-android 目录不存在，跳过 Android 子仓库克隆${NC}"
+    elif [[ -d "$android_subrepo_path" ]]; then
+        echo -e "${YELLOW}  ⏭  跳过: nicebuildSDK 目录已存在${NC}"
+    else
+        echo -e "${CYAN}执行: git clone ${android_subrepo_url} ${android_subrepo_path}${NC}"
+        echo ""
+
+        if ! (cd "${target_dir}/plaud-android" && git clone "$android_subrepo_url" "nicebuildSDK" 2>&1); then
+            echo -e "${BOLD_YELLOW}警告: Android 子仓库克隆失败${NC}"
+            echo -e "${YELLOW}你可以稍后手动执行: cd ${target_dir}/plaud-android && git clone ${android_subrepo_url} nicebuildSDK${NC}"
+        else
+            echo ""
+            echo -e "${GREEN}${CHECK_MARK} Android 子仓库克隆成功${NC}"
+        fi
+    fi
+
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${GREEN}${CHECK_MARK} Plaud-App 仓库克隆完成${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    echo -e "${CYAN}下一步:${NC}"
+    echo -e "${CYAN}  cd ${target_dir}${NC}"
+    echo -e "${CYAN}  mt list${NC}"
+
+    return 0
+}
+
+bootstrap_environment_and_clone() {
+    local target_dir="${1:-$PLAUD_APP_DEFAULT_DIR}"
+
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  初始化开发环境${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+
+    echo -e "${BLUE}[1/3] 检查 Homebrew...${NC}"
+    local brew_bin=""
+    brew_bin=$(find_brew_bin 2>/dev/null || echo "")
+    if [[ -z "$brew_bin" ]]; then
+        echo -e "${BOLD_RED}${CROSS_MARK} 未检测到 Homebrew${NC}"
+        echo -e "${YELLOW}请先安装 Homebrew，安装完成后重新执行 mt init${NC}"
+        echo -e "${CYAN}官网: https://brew.sh${NC}"
+        echo -e "${CYAN}安装命令:${NC}"
+        echo -e "${CYAN}  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}${CHECK_MARK} Homebrew 已安装: ${brew_bin}${NC}"
+    echo ""
+
+    echo -e "${BLUE}[2/3] 检查 FVM 并安装 Flutter ${FVM_FLUTTER_VERSION}...${NC}"
+    local fvm_bin=""
+    fvm_bin=$(find_fvm_bin "$brew_bin" 2>/dev/null || echo "")
+    if [[ -z "$fvm_bin" ]]; then
+        echo -e "${YELLOW}未检测到 FVM，正在通过 Homebrew 安装...${NC}"
+        print_command "$(pwd)" "$brew_bin" tap "$FVM_BREW_TAP"
+        if ! "$brew_bin" tap "$FVM_BREW_TAP" 2>&1; then
+            echo -e "${BOLD_RED}${CROSS_MARK} Homebrew tap 失败${NC}"
+            return 1
+        fi
+
+        print_command "$(pwd)" "$brew_bin" install fvm
+        if ! "$brew_bin" install fvm 2>&1; then
+            echo -e "${BOLD_RED}${CROSS_MARK} FVM 安装失败${NC}"
+            return 1
+        fi
+
+        fvm_bin=$(find_fvm_bin "$brew_bin" 2>/dev/null || echo "")
+        if [[ -z "$fvm_bin" ]]; then
+            echo -e "${BOLD_RED}${CROSS_MARK} FVM 已安装，但当前终端无法找到 fvm 命令${NC}"
+            echo -e "${YELLOW}请确认 Homebrew 的 bin 目录已加入 PATH 后重试${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}${CHECK_MARK} FVM 安装成功: ${fvm_bin}${NC}"
+    else
+        echo -e "${GREEN}${CHECK_MARK} FVM 已安装: ${fvm_bin}${NC}"
+    fi
+
+    print_command "$(pwd)" "$fvm_bin" install "$FVM_FLUTTER_VERSION"
+    if ! "$fvm_bin" install "$FVM_FLUTTER_VERSION" 2>&1; then
+        echo -e "${BOLD_RED}${CROSS_MARK} Flutter ${FVM_FLUTTER_VERSION} 安装失败${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}${CHECK_MARK} Flutter ${FVM_FLUTTER_VERSION} 已准备完成${NC}"
+    echo ""
+
+    echo -e "${BLUE}[3/3] 执行 mt clone...${NC}"
+    clone_plaud_app "$target_dir"
 }
 
 # 编辑配置文件
@@ -1527,10 +1750,11 @@ Git 命令缩写支持:
 
 工具命令:
   mt list                      列出所有配置的仓库
-  mt init                      手动初始化配置文件（可选，工具会自动处理）
+  mt init [目录名]             检查 Homebrew/FVM，安装 Flutter ${FVM_FLUTTER_VERSION}，并克隆 Plaud-App
+                                  默认目录名: ${PLAUD_APP_DEFAULT_DIR}
   mt config                     编辑配置文件
-  mt clone [目录名]             克隆 Plaud-App 仓库并初始化子模块
-                                  默认目录名: Plaud-App
+  mt clone [目录名]             仅克隆 Plaud-App 仓库并初始化子模块
+                                  默认目录名: ${PLAUD_APP_DEFAULT_DIR}
                                   会自动执行 git submodule update --init --recursive
   mt set-github-token <token>  设置 GitHub token（用于创建 PR）
   mt delete [-a|--all]         删除本地分支
@@ -1562,6 +1786,7 @@ PR 命令:
       -b, --b, --base <branch>  目标分支（默认: main）
       -t, --t, --title <title> PR 标题（默认: 使用当前分支名）
       -d, --d, --description <text> PR 描述
+      -r, --ready               创建后将 PR 设为 Ready（非 Draft）
     注意: 
       - 需要设置 GitHub token，使用 'mt set-github-token <token>' 命令
       - 新建 PR 默认创建为 Draft（WIP），并自动：
@@ -1674,6 +1899,7 @@ PR 示例:
   mt pr -b develop                        # 目标分支为 develop
   mt pr -t "Add new feature"              # 指定 PR 标题
   mt pr -t "Fix bug" -d "修复了某个问题"   # 指定标题和描述
+  mt pr -r                                # 创建后自动设置为 Ready
 
 示例:
   mt checkout -b feature/new-feature
@@ -3289,6 +3515,76 @@ if isinstance(data, dict):
     sed -nE 's/.*"number"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' | head -n 1
 }
 
+# 从 PR URL 提取 PR number
+extract_pr_number_from_url() {
+    local pr_url="$1"
+    if [[ -z "$pr_url" ]]; then
+        return 1
+    fi
+    echo "$pr_url" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+' | head -n 1
+}
+
+# 从 GitHub API 的 /user 响应中提取展示名（优先 name，其次 login）
+extract_github_user_display() {
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import sys, json
+s = sys.stdin.read()
+try:
+    data = json.loads(s)
+except Exception:
+    sys.exit(0)
+if isinstance(data, dict):
+    name = data.get("name")
+    login = data.get("login")
+    if isinstance(name, str) and name.strip():
+        sys.stdout.write(name.strip())
+    elif isinstance(login, str) and login.strip():
+        sys.stdout.write(login.strip())
+' 2>/dev/null
+        return 0
+    fi
+    
+    local name
+    name=$(sed -nE 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n 1)
+    if [[ -n "$name" ]]; then
+        echo "$name"
+        return 0
+    fi
+    
+    sed -nE 's/.*"login"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n 1
+}
+
+# 获取当前 GitHub token 对应的作者展示名
+get_github_user_display_name() {
+    local github_token="$1"
+    if [[ -z "$github_token" ]]; then
+        return 1
+    fi
+    
+    local response
+    response=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+        -H "Authorization: token ${github_token}" \
+        "https://api.github.com/user" 2>/dev/null)
+    
+    local display
+    display=$(echo "$response" | extract_github_user_display)
+    if [[ -n "$display" ]]; then
+        echo "$display"
+        return 0
+    fi
+    
+    # fallback：读取本地 git 用户名
+    local local_name
+    local_name=$(git -C "$PROJECT_ROOT" config user.name 2>/dev/null || true)
+    if [[ -n "$local_name" ]]; then
+        echo "$local_name"
+        return 0
+    fi
+    
+    return 1
+}
+
 # 为 PR 添加 label（仅用于新建 PR）
 add_label_to_pr() {
     local repo_full_name="$1"
@@ -3859,11 +4155,43 @@ EOF
     fi
 }
 
+# 将 Draft PR 设置为 Ready for review
+mark_pr_ready_for_review() {
+    local repo_full_name="$1"
+    local pr_number="$2"
+    local github_token="$3"
+    
+    if [[ -z "$repo_full_name" ]] || [[ -z "$pr_number" ]] || [[ -z "$github_token" ]]; then
+        return 1
+    fi
+    
+    local api_url="https://api.github.com/repos/${repo_full_name}/pulls/${pr_number}/ready_for_review"
+    local response
+    response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Authorization: token ${github_token}" 2>&1)
+    
+    local http_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | sed '$d')
+    
+    if [[ "$http_code" == "200" ]]; then
+        return 0
+    fi
+    
+    # 422: 已经是 Ready 或状态不允许
+    if [[ "$http_code" == "422" ]] && echo "$body" | grep -qi "already ready for review"; then
+        return 0
+    fi
+    
+    return 1
+}
+
 # 创建多个仓库的 PR 并关联
 create_prs() {
     local target_branch="${1:-main}"
     local title="${2:-}"
     local description="${3:-}"
+    local ready_for_review="${4:-false}"
     
     # 检查 GitHub token
     local github_token
@@ -3900,9 +4228,22 @@ create_prs() {
     local pr_urls_values=()
     local pr_status_names=()
     local pr_status_values=()
+    local review_summary_names=()
+    local review_summary_urls=()
+    local review_summary_descs=()
+    local review_summary_authors=()
     local total=${#repos_array[@]}
     local success_count=0
     local skipped_count=0
+    
+    # 获取作者展示名（用于 Review 群发布摘要）
+    local review_author=""
+    review_author=$(get_github_user_display_name "$github_token" 2>/dev/null || echo "")
+    if [[ -z "$review_author" ]]; then
+        review_author="unknown"
+    fi
+    review_author=$(echo "$review_author" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^ //; s/ $//')
+    review_author="${review_author//|/ }"
     
     # 第一遍：创建所有 PR
     for i in "${!repos_array[@]}"; do
@@ -3919,6 +4260,15 @@ create_prs() {
             echo -e "${YELLOW}  ⏭  跳过: 路径不存在 ${path}${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("路径不存在")
+            ((skipped_count++))
+            continue
+        fi
+
+        if ! is_git_repository_path "$repo_path"; then
+            echo -e "${YELLOW}  ⏭  跳过: 不是 Git 仓库 ${path}${NC}"
+            pr_status_names+=("$name")
+            pr_status_values+=("不是 Git 仓库")
+            ((skipped_count++))
             continue
         fi
         
@@ -4079,6 +4429,40 @@ create_prs() {
             ((success_count++))
             echo -e "${GREEN}  ${CHECK_MARK} PR 已存在${NC}"
             echo -e "${CYAN}    ${existing_pr_url}${NC}"
+            
+            # 收集 review 群摘要信息
+            local summary_desc="${pr_description:-}"
+            if [[ -z "$summary_desc" ]]; then
+                summary_desc="$pr_title"
+            fi
+            summary_desc=$(echo "$summary_desc" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^ //; s/ $//')
+            summary_desc="${summary_desc//|/ }"
+            if [[ -z "$summary_desc" ]]; then
+                summary_desc="无描述"
+            fi
+            review_summary_names+=("$name")
+            review_summary_urls+=("$existing_pr_url")
+            review_summary_descs+=("$summary_desc")
+            review_summary_authors+=("$review_author")
+            
+            # 如果需要，设置为 Ready for review
+            if [[ "$ready_for_review" == "true" ]]; then
+                if declare -F mark_pr_ready_for_review >/dev/null 2>&1; then
+                    local pr_number
+                    pr_number=$(extract_pr_number_from_url "$existing_pr_url")
+                    if [[ -n "$pr_number" ]] && [[ -n "$repo_full_name" ]]; then
+                        if mark_pr_ready_for_review "$repo_full_name" "$pr_number" "$github_token"; then
+                            echo -e "${GREEN}  ${CHECK_MARK} 已设置为 Ready${NC}"
+                        else
+                            echo -e "${BOLD_YELLOW}  警告: 设置 Ready 失败${NC}"
+                        fi
+                    else
+                        echo -e "${BOLD_YELLOW}  警告: 无法解析 PR 号，跳过 Ready${NC}"
+                    fi
+                else
+                    echo -e "${BOLD_YELLOW}  警告: 当前版本不支持设置 Ready，请升级 mt${NC}"
+                fi
+            fi
             echo ""
             continue
         else
@@ -4104,6 +4488,40 @@ create_prs() {
                 ((success_count++))
                 echo -e "${GREEN}  ${CHECK_MARK} PR 创建成功${NC}"
                 echo -e "${CYAN}    ${pr_url}${NC}"
+                
+                # 收集 review 群摘要信息
+                local summary_desc="${pr_description:-}"
+                if [[ -z "$summary_desc" ]]; then
+                    summary_desc="$pr_title"
+                fi
+                summary_desc=$(echo "$summary_desc" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^ //; s/ $//')
+                summary_desc="${summary_desc//|/ }"
+                if [[ -z "$summary_desc" ]]; then
+                    summary_desc="无描述"
+                fi
+                review_summary_names+=("$name")
+                review_summary_urls+=("$pr_url")
+                review_summary_descs+=("$summary_desc")
+                review_summary_authors+=("$review_author")
+                
+                # 如果需要，设置为 Ready for review
+                if [[ "$ready_for_review" == "true" ]]; then
+                    if declare -F mark_pr_ready_for_review >/dev/null 2>&1; then
+                        local pr_number
+                        pr_number=$(extract_pr_number_from_url "$pr_url")
+                        if [[ -n "$pr_number" ]] && [[ -n "$repo_full_name" ]]; then
+                            if mark_pr_ready_for_review "$repo_full_name" "$pr_number" "$github_token"; then
+                                echo -e "${GREEN}  ${CHECK_MARK} 已设置为 Ready${NC}"
+                            else
+                                echo -e "${BOLD_YELLOW}  警告: 设置 Ready 失败${NC}"
+                            fi
+                        else
+                            echo -e "${BOLD_YELLOW}  警告: 无法解析 PR 号，跳过 Ready${NC}"
+                        fi
+                    else
+                        echo -e "${BOLD_YELLOW}  警告: 当前版本不支持设置 Ready，请升级 mt${NC}"
+                    fi
+                fi
             elif [[ "$pr_url" == "PR_EXISTS" ]] && [[ "$pr_exit_code" -eq 0 ]]; then
                 # PR 已存在但无法获取 URL，简单提示
                 pr_status_names+=("$name")
@@ -4225,6 +4643,33 @@ create_prs() {
         echo -e "${YELLOW}没有创建任何 PR${NC}"
     fi
     echo -e "${BLUE}========================================${NC}"
+    
+    # Review 群发布摘要
+    if [[ ${#review_summary_urls[@]} -gt 0 ]]; then
+        echo ""
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}  Review 群发布摘要${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        
+        for i in "${!review_summary_urls[@]}"; do
+            local repo_name="${review_summary_names[$i]}"
+            local pr_url="${review_summary_urls[$i]}"
+            local desc="${review_summary_descs[$i]}"
+            local author="${review_summary_authors[$i]}"
+            echo "[${repo_name}]"
+            echo "  作者: ${author}"
+            echo "  变更: ${desc}"
+            echo "  PR: ${pr_url}"
+            echo ""
+        done
+        
+        echo ""
+        echo "注：本PR review由mt工具创建"
+        
+        echo ""
+        echo -e "${BLUE}========================================${NC}"
+    fi
     return 0
 }
 
@@ -4239,106 +4684,13 @@ main() {
             list_repositories
             ;;
         init)
-            init_config
+            bootstrap_environment_and_clone "${2:-$PLAUD_APP_DEFAULT_DIR}"
             ;;
         config)
             edit_config
             ;;
         clone)
-            # mt clone 命令：克隆 Plaud-App 仓库并初始化子模块
-            local target_dir="${2:-Plaud-App}"
-            local repo_url="git@github.com:Plaud-AI/Plaud-App.git"
-            
-            echo -e "${BLUE}========================================${NC}"
-            echo -e "${BLUE}  开始克隆 Plaud-App 仓库${NC}"
-            echo -e "${BLUE}========================================${NC}"
-            echo ""
-            echo -e "${CYAN}仓库地址: ${repo_url}${NC}"
-            echo -e "${CYAN}目标目录: ${target_dir}${NC}"
-            echo ""
-            
-            # 检查目标目录是否已存在
-            if [[ -d "$target_dir" ]]; then
-                echo -e "${BOLD_YELLOW}警告: 目录 ${target_dir} 已存在${NC}"
-                echo -e "${YELLOW}是否要继续？(y/N)${NC}"
-                read -r response
-                if [[ ! "$response" =~ ^[Yy]$ ]]; then
-                    echo -e "${YELLOW}已取消${NC}"
-                    exit 0
-                fi
-            fi
-            
-            # 执行 git clone
-            echo -e "${BLUE}[1/3] 克隆主仓库...${NC}"
-            print_command "$(pwd)" git clone "$repo_url" "$target_dir"
-            
-            if ! git clone "$repo_url" "$target_dir" 2>&1; then
-                echo -e "${BOLD_RED}${CROSS_MARK} 克隆失败${NC}"
-                exit 1
-            fi
-            
-            echo ""
-            echo -e "${GREEN}${CHECK_MARK} 主仓库克隆成功${NC}"
-            echo ""
-            
-            # 进入目录并初始化子模块
-            echo -e "${BLUE}[2/3] 初始化子模块...${NC}"
-            echo -e "${CYAN}执行: git submodule update --init --recursive${NC}"
-            echo ""
-            
-            # 执行子模块初始化，并显示输出
-            local submodule_output
-            if ! submodule_output=$(cd "$target_dir" && git submodule update --init --recursive 2>&1); then
-                echo -e "${BOLD_RED}${CROSS_MARK} 子模块初始化失败${NC}"
-                echo -e "${YELLOW}输出:${NC}"
-                echo "$submodule_output" | sed 's/^/  /'
-                echo ""
-                echo -e "${BOLD_YELLOW}警告: 主仓库已克隆成功，但子模块初始化失败${NC}"
-                echo -e "${YELLOW}你可以稍后手动执行: cd ${target_dir} && git submodule update --init --recursive${NC}"
-                exit 1
-            fi
-            
-            # 显示子模块初始化的输出（如果有）
-            if [[ -n "$submodule_output" ]]; then
-                echo "$submodule_output" | sed 's/^/  /'
-            fi
-            
-            echo ""
-            echo -e "${GREEN}${CHECK_MARK} 子模块初始化成功${NC}"
-            echo ""
-            
-            # 克隆 Android 子仓库（需要手动 clone）
-            echo -e "${BLUE}[3/3] 克隆 Android 子仓库...${NC}"
-            local android_subrepo_path="${target_dir}/plaud-android/nicebuildSDK"
-            local android_subrepo_url="git@github.com:Plaud-AI/ble-sdk-android.git"
-            
-            # 检查父目录是否存在
-            if [[ ! -d "${target_dir}/plaud-android" ]]; then
-                echo -e "${BOLD_YELLOW}警告: plaud-android 目录不存在，跳过 Android 子仓库克隆${NC}"
-            elif [[ -d "$android_subrepo_path" ]]; then
-                echo -e "${YELLOW}  ⏭  跳过: nicebuildSDK 目录已存在${NC}"
-            else
-                echo -e "${CYAN}执行: git clone ${android_subrepo_url} ${android_subrepo_path}${NC}"
-                echo ""
-                
-                if ! (cd "${target_dir}/plaud-android" && git clone "$android_subrepo_url" "nicebuildSDK" 2>&1); then
-                    echo -e "${BOLD_YELLOW}警告: Android 子仓库克隆失败${NC}"
-                    echo -e "${YELLOW}你可以稍后手动执行: cd ${target_dir}/plaud-android && git clone ${android_subrepo_url} nicebuildSDK${NC}"
-                else
-                    echo ""
-                    echo -e "${GREEN}${CHECK_MARK} Android 子仓库克隆成功${NC}"
-                fi
-            fi
-            
-            echo ""
-            echo -e "${BLUE}========================================${NC}"
-            echo -e "${GREEN}${CHECK_MARK} 克隆完成！${NC}"
-            echo -e "${BLUE}========================================${NC}"
-            echo ""
-            echo -e "${CYAN}下一步:${NC}"
-            echo -e "${CYAN}  cd ${target_dir}${NC}"
-            echo -e "${CYAN}  mt list  # 查看所有仓库${NC}"
-            echo ""
+            clone_plaud_app "${2:-$PLAUD_APP_DEFAULT_DIR}"
             ;;
         set-github-token)
             if [[ -z "${2:-}" ]]; then
@@ -4452,6 +4804,7 @@ main() {
             local target_branch="main"
             local title=""
             local description=""
+            local ready_for_review=false
             
             # 解析参数
             while [[ $# -gt 0 ]]; do
@@ -4480,15 +4833,19 @@ main() {
                         description="$2"
                         shift 2
                         ;;
+                    -r|--ready)
+                        ready_for_review=true
+                        shift
+                        ;;
                     *)
                         echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
-                        echo -e "${YELLOW}用法: mt pr [-b <branch>] [-t <title>] [-d <description>]${NC}"
+                        echo -e "${YELLOW}用法: mt pr [-b <branch>] [-t <title>] [-d <description>] [-r]${NC}"
                         exit 1
                         ;;
                 esac
             done
             
-            if ! create_prs "$target_branch" "$title" "$description"; then
+            if ! create_prs "$target_branch" "$title" "$description" "$ready_for_review"; then
                 exit 1
             fi
             ;;
@@ -4801,4 +5158,3 @@ main() {
 
 # 执行主函数
 main "$@"
-

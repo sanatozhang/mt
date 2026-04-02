@@ -60,13 +60,16 @@ export PATH="/path/to/mt/bin:$PATH"
    ./bin/install-mt.sh
    ```
 
-2. **在项目中使用**：
+2. **初始化开发环境**：
    ```bash
-   # 进入你的项目目录
-   cd /path/to/your/project
+   # 进入你的工作目录
+   cd /path/to/your/workspace
    
-   # 初始化配置（自动从 mt 仓库复制或生成默认配置）
+   # 检查 Homebrew / FVM，安装 Flutter 3.38.9，并克隆代码到 ./Plaud-App
    mt init
+
+   # 进入项目目录
+   cd Plaud-App
    
    # 使用工具
    mt checkout -b feature/new-feature  # 所有仓库切换分支
@@ -79,6 +82,16 @@ export PATH="/path/to/mt/bin:$PATH"
    ```bash
    mt upgrade
    ```
+
+## PR 协作
+
+`mt pr` 会为所有仓库创建 PR（默认 Draft）。加 `-r/--ready` 可在创建后自动设为 Ready。
+命令结束会输出 Review 群发布摘要，包含作者、变更描述和 PR 链接，便于直接转发。
+
+示例：
+```bash
+mt pr -r -d "修复多仓库 PR 流程"
+```
 
 ## 目录结构
 
@@ -109,4 +122,3 @@ mt upgrade
 1. 从远程仓库获取最新更新
 2. 显示更新内容
 3. 确认后执行更新
-

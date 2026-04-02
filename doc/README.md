@@ -35,20 +35,21 @@ mt --version
 
 ## 配置
 
-### 初始化配置
+### 初始化开发环境
 
-首次使用前，需要生成配置文件：
+首次使用前，先初始化本地开发环境并克隆代码：
 
 ```bash
 mt init
 ```
 
-这会生成默认的 `.mt-config.yaml` 配置文件，包含以下仓库：
-- plaud-flutter-cn
-- plaud-flutter-global
-- plaud-flutter-common
-- plaud-android
-- plaud-ios
+`mt init` 会依次执行：
+- 检测是否安装 Homebrew；未安装则提示先安装
+- 检测是否安装 FVM；未安装则通过 Homebrew 安装
+- 使用 FVM 安装 Flutter `3.38.9`
+- 执行 `mt clone` 克隆 Plaud-App 仓库
+
+克隆完成后，`mt` 会在项目根目录按需自动生成 `.mt-config.yaml`。
 
 ### 手动编辑配置
 
@@ -164,7 +165,7 @@ mt fetch
 # 列出所有配置的仓库
 mt list
 
-# 初始化配置文件（优先从 mt 仓库复制，不存在则生成默认配置）
+# 初始化本地开发环境并克隆代码
 mt init
 
 # 编辑配置文件
@@ -408,8 +409,8 @@ which mt
 ### 配置文件未找到
 
 ```bash
-# 初始化配置（生成默认配置）
-mt init
+# 直接执行任意 mt 命令，工具会自动生成配置
+mt list
 ```
 
 ### 仓库路径不存在
@@ -544,4 +545,3 @@ mt pr -t "Feature: Add new feature" -d "实现了新功能"
 ## 许可证
 
 本项目遵循项目主许可证。
-
