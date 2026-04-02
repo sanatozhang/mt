@@ -18,9 +18,16 @@
 ### 首次安装
 
 ```bash
-# 在项目根目录执行
-./mt/bin/install-mt.sh
+# 一键安装
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sanatozhang/mt/main/bin/install-mt.sh)"
+
+# 如果一键安装失败，回退到手动安装
+git clone https://github.com/sanatozhang/mt.git
+cd mt
+./bin/install-mt.sh
 ```
+
+如果失败发生在 `curl` 拉取安装脚本之前，例如 GitHub Raw 被网络拦截，只能直接使用手动克隆方式。
 
 安装脚本会自动：
 1. 检测你的 Shell 类型（bash/zsh）

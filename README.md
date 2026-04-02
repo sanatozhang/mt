@@ -1,132 +1,77 @@
-# MT - 多仓库 Git 管理工具
+# MT
 
-MT (Multi-repo Tool) 是一个用于管理多仓库 Git 操作的工具。
+`mt` 是 Plaud-App 的多仓库开发工具。默认固定支持 7 个仓库，零配置可用。
 
 ## 安装
 
-### 方式一：一键安装（推荐）
-
-从 GitHub 直接安装，无需手动克隆仓库：
+推荐直接一键安装：
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sanatozhang/mt/refs/heads/main/bin/install-mt.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sanatozhang/mt/main/bin/install-mt.sh)"
 ```
 
-安装脚本会自动：
-1. 从 GitHub 克隆 mt 仓库源码到 `~/.local/share/mt`（使用 SSH 方式，优先尝试）
-2. 将 `mt` 命令添加到系统 PATH
-3. 配置 Shell 环境（自动检测 zsh/bash）
-
-**注意**：
-- 源码会完整克隆到本地，方便后续使用 `mt upgrade` 命令更新
-- 如果 SSH 方式失败，会自动回退到 HTTPS 方式
-- 如果目录已存在，会提示是否重新克隆
-
-安装完成后，重新打开终端或运行 `source ~/.zshrc`（或 `source ~/.bashrc`）即可使用。
-
-### 方式二：手动克隆安装
-
-如果你已经克隆了仓库，可以直接运行安装脚本：
+如果一键安装失败，或者 `curl` 无法访问 GitHub Raw，就直接回退到手动安装：
 
 ```bash
-# 使用 SSH 方式（推荐）
-git clone git@github.com:sanatozhang/mt.git
-cd mt
-./bin/install-mt.sh
-
-# 或使用 HTTPS 方式
 git clone https://github.com/sanatozhang/mt.git
 cd mt
 ./bin/install-mt.sh
 ```
 
-### 方式三：直接使用（不安装）
-
-如果你不想安装到系统，可以直接使用：
+安装完成后，重新打开终端，或者执行：
 
 ```bash
-# 将 mt 目录添加到 PATH
-export PATH="/path/to/mt/bin:$PATH"
+source ~/.zshrc
+# 或
+source ~/.bashrc
 ```
 
-## 快速开始
+## 初始化开发环境
 
-1. **安装工具**（选择一种方式）：
-   ```bash
-   # 方式一：一键安装（推荐）
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sanatozhang/mt/refs/heads/main/bin/install-mt.sh)"
-   
-   # 方式二：如果已克隆仓库
-   ./bin/install-mt.sh
-   ```
-
-2. **初始化开发环境**：
-   ```bash
-   # 进入你的工作目录
-   cd /path/to/your/workspace
-   
-   # 检查 Homebrew / FVM，安装 Flutter 3.38.9，并克隆代码到 ./Plaud-App
-   mt init
-
-   # 进入项目目录
-   cd Plaud-App
-
-   # 检查环境、工作区和仓库状态
-   mt doctor
-   
-   # 使用工具
-   mt --current checkout -b feature/new-feature # 只切当前仓库
-   mt checkout -b feature/new-feature  # 所有仓库切换分支
-   mt status                            # 查看所有仓库状态（彩色输出，与 git status 一致）
-   mt --json branch --show-current      # JSON 输出，方便脚本接入
-   mt build cn -r                       # 构建 CN release 包
-   mt install global                    # 构建并安装到设备
-   ```
-
-   `mt` 默认固定支持 7 个仓库，直接零配置使用，不再依赖 `.mt-config.yaml`。
-
-3. **更新工具**：
-   ```bash
-   mt upgrade
-   ```
-
-## PR 协作
-
-`mt pr` 会为所有仓库创建 PR（默认 Draft）。加 `-r/--ready` 可在创建后自动设为 Ready。
-命令结束会输出 Review 群发布摘要，包含作者、变更描述和 PR 链接，便于直接转发。
-工具现在只会复用 `open` 状态的 PR；如果检测到同分支的历史 PR 已关闭或已合并，会单独提示仓库状态和历史 PR 链接，避免某个仓库被误判成“已经创建成功”。
-
-示例：
-```bash
-mt pr -r -d "修复多仓库 PR 流程"
-```
-
-## 目录结构
-
-```
-mt/
-├── bin/                    # 脚本目录
-│   ├── mt                  # 主工具脚本
-│   └── install-mt.sh      # 安装脚本
-└── doc/                    # 文档目录
-    ├── README.md           # 使用文档
-    └── TECHNICAL_DESIGN.md # 技术方案
-```
-
-## 详细文档
-
-- [使用文档](doc/README.md) - 完整的使用说明和示例
-- [技术方案](doc/TECHNICAL_DESIGN.md) - 技术架构和实现细节
-
-## 升级
-
-使用 `mt upgrade` 命令可以更新工具到最新版本：
+首次拉起工作区时执行：
 
 ```bash
+cd /path/to/your/workspace
+mt init
+```
+
+如果要指定目录名：
+
+```bash
+mt init My-Plaud-App
+```
+
+`mt init` 会依次完成：
+- 检测 Homebrew
+- 检测并安装 FVM
+- 安装 Flutter `3.38.9`
+- 执行 `mt clone` 拉取 Plaud-App 代码
+
+初始化完成后建议先检查一次环境：
+
+```bash
+cd Plaud-App
+mt doctor
+```
+
+如果你传了自定义目录名，进入对应目录即可。
+
+## 常用命令
+
+```bash
+mt list
+mt status
+mt --current branch --show-current
+mt checkout -b feature/my-feature
+mt build cn -r
+mt install global
+mt pr -r -d "修复问题描述"
 mt upgrade
 ```
 
-该命令会：
-1. 从远程仓库获取最新更新
-2. 显示更新内容
-3. 确认后执行更新
+常用全局选项有 `--current`、`--json`、`--dry-run`、`--fail-fast`。完整参数说明见详细文档。
+
+## 详细文档
+
+- [使用文档](doc/README.md)
+- [技术方案](doc/TECHNICAL_DESIGN.md)
