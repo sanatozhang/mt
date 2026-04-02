@@ -70,13 +70,20 @@ export PATH="/path/to/mt/bin:$PATH"
 
    # 进入项目目录
    cd Plaud-App
+
+   # 检查环境、工作区和仓库状态
+   mt doctor
    
    # 使用工具
+   mt --current checkout -b feature/new-feature # 只切当前仓库
    mt checkout -b feature/new-feature  # 所有仓库切换分支
    mt status                            # 查看所有仓库状态（彩色输出，与 git status 一致）
+   mt --json branch --show-current      # JSON 输出，方便脚本接入
    mt build cn -r                       # 构建 CN release 包
    mt install global                    # 构建并安装到设备
    ```
+
+   `mt` 默认固定支持 7 个仓库，直接零配置使用，不再依赖 `.mt-config.yaml`。
 
 3. **更新工具**：
    ```bash
@@ -87,6 +94,7 @@ export PATH="/path/to/mt/bin:$PATH"
 
 `mt pr` 会为所有仓库创建 PR（默认 Draft）。加 `-r/--ready` 可在创建后自动设为 Ready。
 命令结束会输出 Review 群发布摘要，包含作者、变更描述和 PR 链接，便于直接转发。
+工具现在只会复用 `open` 状态的 PR；如果检测到同分支的历史 PR 已关闭或已合并，会单独提示仓库状态和历史 PR 链接，避免某个仓库被误判成“已经创建成功”。
 
 示例：
 ```bash

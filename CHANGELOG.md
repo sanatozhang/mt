@@ -19,12 +19,18 @@
 
 #### 多仓库覆盖范围
 - 默认仓库列表固定覆盖 7 个仓库；缺失或未初始化的仓库会自动跳过
+- 移除 `.mt-config.yaml` 运行时依赖，默认 7 仓库改为零配置运行
 - `mt status` 无改动时输出“没有变化”
+- 新增全局仓库筛选与执行控制：`--current`、`--main-only`、`--subrepos-only`、`--only`、`--exclude`、`--dry-run`、`--json`、`--fail-fast`
+- 新增 `mt doctor` 用于检查开发环境、工作区和仓库状态
+- 将 `bin/mt` 按模块拆分为 `bin/lib/*.sh`，入口脚本缩减为轻量加载器，便于维护各命令域
+- `mt go`、`mt rebuild`、`mt init` 等组合命令在任一步骤失败时会明确输出整体失败结果，并返回非零退出码
 
 ### 修复
 
 #### PR 描述更新异常
 - 修复 `mt pr` 更新 PR 描述时 here-doc 结构错误导致的 `response/http_code` 未定义报错
+- 修复 `mt pr` 误将 closed/merged 历史 PR 当成当前 open PR 的问题，避免部分仓库在汇总中“丢失”
 
 ## [1.4.1] - 2025-01-16
 

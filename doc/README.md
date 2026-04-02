@@ -9,7 +9,7 @@
 - ✅ 统一管理多个 Git 仓库
 - ✅ 支持所有常用 Git 命令
 - ✅ 串行执行，输出清晰
-- ✅ 配置文件化管理，易于扩展
+- ✅ 固定支持 7 个仓库，零配置可用
 - ✅ 自动错误处理和汇总
 - ✅ 彩色输出，易于阅读
 
@@ -33,7 +33,7 @@
 mt --version
 ```
 
-## 配置
+## 初始化与工作区
 
 ### 初始化开发环境
 
@@ -49,35 +49,64 @@ mt init
 - 使用 FVM 安装 Flutter `3.38.9`
 - 执行 `mt clone` 克隆 Plaud-App 仓库
 
-克隆完成后，`mt` 会在项目根目录按需自动生成 `.mt-config.yaml`。
+克隆完成后即可直接使用，`mt` 不再依赖 `.mt-config.yaml`。
 
-### 手动编辑配置
+### 工作区识别
 
-配置文件位于项目根目录：`.mt-config.yaml`
+`mt` 默认固定支持以下 7 个仓库，并会自动识别 Plaud-App 工作区根目录：
 
-```yaml
-repositories:
-  - name: plaud-flutter-cn
-    path: plaud-flutter-cn
-    url: git@github.com:Plaud-AI/plaud-flutter-cn.git
-  - name: plaud-flutter-global
-    path: plaud-flutter-global
-    url: git@github.com:Plaud-AI/plaud-flutter-global.git
-  # ... 更多仓库
+```text
+plaud-flutter-cn
+plaud-flutter-global
+plaud-flutter-common
+plaud-android
+plaud-ios
+plaud-android/nicebuildSDK
+plaud-ios/PLAUD/PenSubmodules
 ```
 
-### 添加新仓库
-
-编辑 `.mt-config.yaml`，添加新的仓库配置：
-
-```yaml
-repositories:
-  - name: new-repo
-    path: new-repo
-    url: git@github.com:org/new-repo.git
-```
+当前版本不再通过配置文件扩展仓库列表。
 
 ## 使用方法
+
+### 全局选项
+
+以下选项需要放在命令前：
+
+```bash
+mt --current branch
+mt --main-only status
+mt --only plaud-android status
+mt --exclude PenSubmodules branch
+mt --dry-run checkout feature/test
+mt --json list
+mt --fail-fast branch --show-current
+```
+
+- `--current`：只作用于当前仓库
+- `--main-only`：只作用于主仓库
+- `--subrepos-only`：只作用于子仓库
+- `--only <repo>`：只作用于指定仓库名或路径，可重复传入
+- `--exclude <repo>`：排除指定仓库名或路径，可重复传入
+- `--dry-run`：只打印将执行的操作
+- `--json`：以 JSON 输出结果
+- `--fail-fast`：遇到第一个失败立即停止
+- `--continue-on-error`：失败后继续执行其他仓库
+- `--confirm` / `--no-confirm`：控制高风险命令是否确认
+
+### 环境检查
+
+```bash
+mt doctor
+```
+
+会检查：
+- Homebrew
+- FVM
+- Flutter `3.38.9`
+- Git
+- GitHub token
+- 工作区与仓库状态
 
 ### 基本语法
 
@@ -122,7 +151,7 @@ mt delete                    # 删除最近没有使用的3个分支（分支数
 mt delete -a                 # 删除所有分支（除了当前分支和 main/master）
 ```
 
-**注意**：以下命令会在所有配置的仓库中执行：
+**注意**：以下命令会在所有内置仓库中执行：
 - `checkout`, `branch`, `switch` - 分支切换和查看
 - `merge`, `rebase`, `cherry-pick` - 分支合并和变基
 - `status`, `stash` - 状态查看和暂存
@@ -162,13 +191,16 @@ mt fetch
 ### 工具命令
 
 ```bash
-# 列出所有配置的仓库
+# 列出固定支持的仓库
 mt list
+
+# 检查环境和仓库状态
+mt doctor
 
 # 初始化本地开发环境并克隆代码
 mt init
 
-# 编辑配置文件
+# 兼容入口：提示当前版本已无需 .mt-config.yaml
 mt config
 
 # 删除本地分支
@@ -313,7 +345,7 @@ mt push origin feature/new-feature
 
 `mt` 采用**串行执行**方式：
 
-1. 按配置文件顺序，逐个仓库执行命令
+1. 按工具内置仓库顺序，逐个仓库执行命令
 2. 每个仓库执行完成后显示结果
 3. 如果某个仓库执行失败，会继续执行其他仓库
 4. 最后汇总所有执行结果
@@ -371,7 +403,7 @@ mt push origin feature/new-feature
    - 分支相关命令（`checkout`, `branch`, `status` 等）会在所有仓库执行
    - 其他命令（`commit`, `push`, `log` 等）只在当前仓库执行
 
-3. **配置文件位置**：`mt` 会自动查找项目根目录的 `.mt-config.yaml`
+3. **工作区根目录**：`mt` 会自动识别 Plaud-App 工作区根目录，不需要额外配置文件
 
 4. **Git 命令参数**：所有 Git 命令的参数都直接传递给底层 Git 命令
 
@@ -406,16 +438,9 @@ which mt
 ./mt/bin/install-mt.sh
 ```
 
-### 配置文件未找到
-
-```bash
-# 直接执行任意 mt 命令，工具会自动生成配置
-mt list
-```
-
 ### 仓库路径不存在
 
-检查 `.mt-config.yaml` 中的路径是否正确，确保仓库已正确克隆。
+检查工作区是否已完成克隆，确保默认 7 个仓库位于 Plaud-App 根目录下。
 
 ### 更新工具
 
@@ -444,7 +469,7 @@ mt set-github-token <your_token>
 
 ### 创建 GitHub Pull Request
 
-`mt pr` 命令可以为所有配置的仓库创建 GitHub Pull Request，并自动关联相关 PR。
+`mt pr` 命令可以为所有内置仓库创建 GitHub Pull Request，并自动关联相关 PR。
 
 #### 基本用法
 
@@ -496,7 +521,6 @@ Token 将保存到项目根目录的 `github.token` 文件中（该文件已添�
 **Token 读取优先级**：
 1. `github.token` 文件（推荐）
 2. 环境变量 `GITHUB_TOKEN`（向后兼容）
-3. 配置文件 `.mt-config.yaml` 中的 `github_token`（向后兼容，不推荐）
 
 #### 获取 GitHub Token
 
@@ -525,7 +549,8 @@ mt pr -t "Feature: Add new feature" -d "实现了新功能"
 
 - 如果当前分支已经是目标分支，会跳过该仓库
 - 如果分支不存在于远程，会跳过创建 PR
-- 如果 PR 已存在，会返回已存在的 PR URL
+- 如果存在 `open` PR，会返回已存在的 PR URL
+- 如果只检测到同分支的历史 PR（closed/merged），会明确提示历史 PR 链接，不会再误判成当前已成功创建
 - 新建 PR 默认创建为 **Draft（WIP）**，并自动：
   - 请求 **Copilot** 作为 reviewer（最佳努力）
   - 添加 label：`MT AUTO`
