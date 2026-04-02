@@ -266,7 +266,11 @@ main() {
     if ! parse_global_options "$@"; then
         exit 1
     fi
-    set -- "${PARSED_ARGS[@]}"
+    if [[ ${#PARSED_ARGS[@]} -gt 0 ]]; then
+        set -- "${PARSED_ARGS[@]}"
+    else
+        set --
+    fi
 
     local first_arg="${1:-help}"
     local handler=""
