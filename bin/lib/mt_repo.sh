@@ -1447,7 +1447,7 @@ Git 命令缩写支持:
 工具命令:
   mt list                      列出固定支持的仓库
   mt doctor                    检查开发环境、工作区和仓库状态
-  mt init [目录名]             检查 Homebrew/FVM，安装 Flutter ${FVM_FLUTTER_VERSION}，并克隆 Plaud-App
+  mt init [目录名]             创建项目环境，安装并配置 Flutter ${FVM_FLUTTER_VERSION}，并克隆 Plaud-App
                                   默认目录名: ${PLAUD_APP_DEFAULT_DIR}
   mt config                    兼容入口：当前版本无需 .mt-config.yaml
   mt clone [目录名]             仅克隆 Plaud-App 仓库并初始化子模块
@@ -1495,7 +1495,7 @@ PR 命令:
       - 如果有未提交的修改或本地分支未推送，会提示需要先提交/推送
 
 构建命令:
-  mt prebuild                              构建 Flutter 模块（构建前准备）
+  mt prebuild                              执行 Flutter 预构建（build_all.sh / pub get / 多语言等）
   mt build [cn|global] [options]
     构建 Android 包（默认构建 global debug）
     选项:
@@ -1507,14 +1507,14 @@ PR 命令:
     说明: build 命令不会执行 clean，直接构建以加快速度（如需 clean，请先执行 mt clean）
 
   mt install [cn|global] [options]
-    构建并安装 Android 包到设备（参数与 build 命令相同）
+    执行 Android 打包并安装到设备（参数与 build 命令相同）
     选项: 与 build 命令相同
     注意: 需要设备已通过 USB 连接并启用 USB 调试
     说明: install 命令不会执行 clean，直接构建以加快速度
 
   mt install ios [cn|global] [options]
   mt install:ios [cn|global] [options]
-    构建并安装 iOS 包到真机设备
+    执行 iOS 打包并安装到真机设备
     选项:
       -d, --d, --debug          构建 Debug 包（默认）
       -r, --r, --release        构建 Release 包
@@ -1522,9 +1522,9 @@ PR 命令:
     说明: 多个设备时会提示选择；install 命令不会执行 clean，直接构建以加快速度
 
   mt go [cn|global] [options]
-    执行 prebuild + install（快速开发流程）
+    新手推荐命令：执行 prebuild + install（快速开发流程）
     选项: 与 build 命令相同
-    说明: 先执行 prebuild 构建 Flutter 模块，然后构建并安装到设备
+    说明: 默认执行 Android Global debug；先执行 prebuild，再构建并安装到设备
 
   mt rebuild [cn|global] [options]
     清理缓存并重新构建（clean + go）
@@ -1543,7 +1543,7 @@ PR 命令:
     说明: build:ios 命令不会执行 clean，直接构建以加快速度（如需 clean，请先执行 mt clean）
 
 构建示例:
-  mt prebuild                              # 构建 Flutter 模块
+  mt prebuild                              # Flutter 预构建（pub get / 多语言等）
   mt build                                 # Global debug（默认）
   mt build -r                              # Global release
   mt build cn                              # CN 官方渠道 debug（默认）
@@ -1552,16 +1552,16 @@ PR 命令:
   mt build cn -a -r                        # CN 所有渠道 release
   mt build global                          # Global debug
   mt build global -r                       # Global release
-  mt install cn                            # 构建并安装 CN debug 包（Android）
+  mt install cn                            # 打包并安装 CN debug 包（Android）
   mt install cn -r                        # 构建并安装 CN release 包（Android）
-  mt install global                        # 构建并安装 Global debug 包（Android）
+  mt install global                        # 打包并安装 Global debug 包（Android）
   mt install global -r                    # 构建并安装 Global release 包（Android）
-  mt install ios                           # 构建并安装 iOS Global debug 包（真机）
+  mt install ios                           # 打包并安装 iOS Global debug 包（真机）
   mt install ios -r                        # 构建并安装 iOS Global release 包（真机）
   mt install ios cn                        # 构建并安装 iOS CN debug 包（真机）
   mt install ios cn -r                     # 构建并安装 iOS CN release 包（真机）
   mt install:ios                           # 同上（别名）
-  mt go                                    # 执行 prebuild + install（Global debug，Android）
+  mt go                                    # 新手推荐：执行 prebuild + install（Global debug，Android）
   mt go cn                                 # 执行 prebuild + install（CN debug，Android）
   mt go cn -r                              # 执行 prebuild + install（CN release，Android）
   mt rebuild                                # 清理缓存并重新构建（Global debug，Android）

@@ -41,10 +41,10 @@ mt init
 mt init My-Plaud-App
 ```
 
-`mt init` 会依次完成：
+`mt init` 用来创建项目环境。它会依次完成：
 - 检测 Homebrew
 - 检测并安装 FVM
-- 安装 Flutter `3.38.9`
+- 安装并配置 Flutter `3.38.9`
 - 执行 `mt clone` 拉取 Plaud-App 代码
 
 初始化完成后建议先检查一次环境：
@@ -56,18 +56,35 @@ mt doctor
 
 如果你传了自定义目录名，进入对应目录即可。
 
-## 常用命令
+## 新手推荐
+
+第一次进入项目后，推荐直接执行：
 
 ```bash
-mt list
-mt status
-mt --current branch --show-current
-mt checkout -b feature/my-feature
-mt build cn -r
-mt install global
-mt pr -r -d "修复问题描述"
-mt upgrade
+cd Plaud-App
+mt go
 ```
+
+`mt go` 是新手最常用的入口，默认会执行 Android `global debug` 的 `prebuild + install`。
+
+## 常用命令
+
+- `mt init`
+  创建项目环境，拉取代码，配置 Flutter 引擎。
+- `mt go`
+  新手推荐命令。默认执行 Android `global debug` 的 `prebuild + install`。
+- `mt install`
+  执行 Android 打包并安装到设备。
+- `mt install:ios`
+  执行 iOS 打包并安装到设备。
+- `mt prebuild`
+  执行 Flutter 项目预构建，调用工作区的 `build_all.sh`，通常包括 `flutter pub get`、多语言脚本等。
+- `mt build`
+  只构建，不安装。
+- `mt pr`
+  为多仓库创建 PR。
+- `mt upgrade`
+  更新 mt 工具。
 
 常用全局选项有 `--current`、`--json`、`--dry-run`、`--fail-fast`。完整参数说明见详细文档。
 

@@ -53,10 +53,19 @@ mt init
 `mt init` 会依次执行：
 - 检测是否安装 Homebrew；未安装则提示先安装
 - 检测是否安装 FVM；未安装则通过 Homebrew 安装
-- 使用 FVM 安装 Flutter `3.38.9`
+- 使用 FVM 安装并配置 Flutter `3.38.9`
 - 执行 `mt clone` 克隆 Plaud-App 仓库
 
 克隆完成后即可直接使用，`mt` 不再依赖 `.mt-config.yaml`。
+
+推荐首次进入项目后直接执行：
+
+```bash
+cd Plaud-App
+mt go
+```
+
+`mt go` 是新手最常用的入口，默认执行 Android `global debug` 的 `prebuild + install`。
 
 ### 工作区识别
 
@@ -232,9 +241,14 @@ mt help
 #### 预构建
 
 ```bash
-# 构建 Flutter 模块（构建 Android 包前准备）
+# 执行 Flutter 项目预构建
 mt prebuild
 ```
+
+`mt prebuild` 会执行工作区根目录的 `build_all.sh`。通常包括：
+- `flutter pub get`
+- Flutter 模块构建
+- 多语言脚本或其他项目预处理步骤
 
 #### 基础构建
 
@@ -271,6 +285,29 @@ mt install cn -c huawei -r               # CN 华为渠道 release
 # - 需要设备已通过 USB 连接并启用 USB 调试
 # - 参数与 build 命令相同
 ```
+
+#### iOS 安装到设备
+
+```bash
+# 构建并安装到连接的 iOS 真机
+mt install:ios                           # Global debug（默认）
+mt install:ios -r                        # Global release
+mt install:ios cn                        # CN debug
+mt install:ios cn -r                     # CN release
+```
+
+`mt install:ios` 用于 iOS 打包并安装到真机，也支持 `mt install ios` 这种写法。
+
+#### 新手推荐命令
+
+```bash
+# 默认执行 prebuild + install
+mt go                                    # Android Global debug（默认）
+mt go cn                                 # Android CN debug
+mt go cn -r                              # Android CN release
+```
+
+`mt go` 适合日常开发和新手使用，默认就是 Android `global debug`。
 
 #### 清除缓存
 
@@ -326,16 +363,28 @@ tail -f mt/logs/build_cn_debug_*.log
 
 #### 使用建议
 
-**完整构建流程**：
+**新手推荐流程**：
+
+```bash
+# 1. 初始化环境并拉代码
+mt init
+
+# 2. 进入项目目录
+cd Plaud-App
+
+# 3. 直接执行推荐命令
+mt go
+```
+
+**手动拆分流程**：
 
 ```bash
 # 1. 预构建 Flutter 模块
 mt prebuild
 
-# 2. 构建 Android 包
-mt build cn -r                           # 构建 CN release
-# 或
-mt build global -r                       # 构建 Global release
+# 2. 构建或安装 Android
+mt build global -r
+mt install global
 ```
 
 **Push 代码前检查**：
