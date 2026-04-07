@@ -634,6 +634,16 @@ doctor() {
         ((error_count++))
     fi
 
+    if command -v fvm >/dev/null 2>&1; then
+        json_add_result "fvm 命令" "success" "$(command -v fvm)" "当前 shell 可用"
+    elif [[ -n "$fvm_bin" ]]; then
+        json_add_result "fvm 命令" "warning" "$fvm_bin" "已安装，但当前 shell 未生效"
+        ((warning_count++))
+    else
+        json_add_result "fvm 命令" "failed" "" "不可用"
+        ((error_count++))
+    fi
+
     local flutter_installed=false
     if [[ -n "$fvm_bin" ]]; then
         if "$fvm_bin" list 2>/dev/null | grep -Fq "$FVM_FLUTTER_VERSION"; then
@@ -646,6 +656,34 @@ doctor() {
     else
         json_add_result "Flutter" "skipped" "$FVM_FLUTTER_VERSION" "FVM 不可用，跳过检测"
         ((warning_count++))
+    fi
+
+    local flutter_cmd_path=""
+    if command -v flutter >/dev/null 2>&1; then
+        flutter_cmd_path="$(command -v flutter)"
+        json_add_result "flutter 命令" "success" "$flutter_cmd_path" "当前 shell 可用"
+    elif [[ -x "${HOME}/.local/bin/flutter" ]]; then
+        json_add_result "flutter 命令" "warning" "${HOME}/.local/bin/flutter" "入口已创建，但当前 shell 未生效"
+        ((warning_count++))
+    elif [[ "$flutter_installed" == true ]]; then
+        json_add_result "flutter 命令" "warning" "$FVM_FLUTTER_VERSION" "已安装 Flutter，但未创建命令入口"
+        ((warning_count++))
+    else
+        json_add_result "flutter 命令" "failed" "" "不可用"
+        ((error_count++))
+    fi
+
+    if command -v dart >/dev/null 2>&1; then
+        json_add_result "dart 命令" "success" "$(command -v dart)" "当前 shell 可用"
+    elif [[ -x "${HOME}/.local/bin/dart" ]]; then
+        json_add_result "dart 命令" "warning" "${HOME}/.local/bin/dart" "入口已创建，但当前 shell 未生效"
+        ((warning_count++))
+    elif [[ "$flutter_installed" == true ]]; then
+        json_add_result "dart 命令" "warning" "$FVM_FLUTTER_VERSION" "已安装 Flutter，但未创建命令入口"
+        ((warning_count++))
+    else
+        json_add_result "dart 命令" "failed" "" "不可用"
+        ((error_count++))
     fi
 
     if command -v git >/dev/null 2>&1; then
@@ -803,6 +841,107 @@ find_fvm_bin() {
     return 1
 }
 
+detect_login_shell_type() {
+    local shell_name="${SHELL##*/}"
+    case "$shell_name" in
+        zsh)
+            echo "zsh"
+            ;;
+        bash)
+            echo "bash"
+            ;;
+        *)
+            if [[ -n "${ZSH_VERSION:-}" ]]; then
+                echo "zsh"
+            elif [[ -n "${BASH_VERSION:-}" ]]; then
+                echo "bash"
+            else
+                echo "zsh"
+            fi
+            ;;
+    esac
+}
+
+get_shell_config_file() {
+    local shell_type="${1:-}"
+    case "$shell_type" in
+        zsh)
+            echo "${HOME}/.zshrc"
+            ;;
+        bash)
+            echo "${HOME}/.bashrc"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+append_line_if_missing() {
+    local file_path="$1"
+    local line="$2"
+
+    mkdir -p "$(dirname "$file_path")"
+    touch "$file_path"
+
+    if grep -Fqx "$line" "$file_path" 2>/dev/null; then
+        return 0
+    fi
+
+    printf '%s\n' "$line" >> "$file_path"
+}
+
+ensure_shell_env_for_fvm() {
+    local brew_bin="$1"
+    local fvm_bin="$2"
+
+    local shell_type
+    shell_type=$(detect_login_shell_type)
+
+    local config_file=""
+    config_file=$(get_shell_config_file "$shell_type" 2>/dev/null || echo "")
+    if [[ -z "$config_file" ]]; then
+        echo -e "${BOLD_YELLOW}警告: 无法识别 shell 配置文件，跳过环境变量写入${NC}"
+        return 0
+    fi
+
+    local brew_dir=""
+    brew_dir="$(dirname "$brew_bin")"
+    local local_bin_dir="${HOME}/.local/bin"
+
+    mkdir -p "$local_bin_dir"
+
+    append_line_if_missing "$config_file" ""
+    append_line_if_missing "$config_file" "# MT runtime"
+    append_line_if_missing "$config_file" "export PATH=\"${brew_dir}:\$HOME/.local/bin:\$PATH\""
+
+    if [[ ":$PATH:" != *":${brew_dir}:"* ]]; then
+        export PATH="${brew_dir}:$PATH"
+    fi
+    if [[ ":$PATH:" != *":${local_bin_dir}:"* ]]; then
+        export PATH="${local_bin_dir}:$PATH"
+    fi
+
+    ln -sf "$fvm_bin" "${local_bin_dir}/fvm"
+
+    cat > "${local_bin_dir}/flutter" <<'EOF'
+#!/bin/bash
+exec "${HOME}/.local/bin/fvm" flutter "$@"
+EOF
+    chmod +x "${local_bin_dir}/flutter"
+
+    cat > "${local_bin_dir}/dart" <<'EOF'
+#!/bin/bash
+exec "${HOME}/.local/bin/fvm" dart "$@"
+EOF
+    chmod +x "${local_bin_dir}/dart"
+
+    echo -e "${GREEN}${CHECK_MARK} 已写入 shell 环境: ${config_file}${NC}"
+    echo -e "${GREEN}${CHECK_MARK} 已创建命令入口: ${local_bin_dir}/fvm, flutter, dart${NC}"
+    echo -e "${YELLOW}请执行以下命令使当前终端生效:${NC}"
+    echo -e "${CYAN}  source ${config_file}${NC}"
+}
+
 clone_plaud_app() {
     local target_dir="${1:-$PLAUD_APP_DEFAULT_DIR}"
 
@@ -942,11 +1081,32 @@ bootstrap_environment_and_clone() {
         echo -e "${GREEN}${CHECK_MARK} FVM 已安装: ${fvm_bin}${NC}"
     fi
 
+    ensure_shell_env_for_fvm "$brew_bin" "$fvm_bin"
+
     print_command "$(pwd)" "$fvm_bin" install "$FVM_FLUTTER_VERSION"
     if ! "$fvm_bin" install "$FVM_FLUTTER_VERSION" 2>&1; then
         echo -e "${BOLD_RED}${CROSS_MARK} Flutter ${FVM_FLUTTER_VERSION} 安装失败${NC}"
         return 1
     fi
+
+    print_command "$(pwd)" "$fvm_bin" global "$FVM_FLUTTER_VERSION"
+    if ! "$fvm_bin" global "$FVM_FLUTTER_VERSION" 2>&1; then
+        echo -e "${BOLD_RED}${CROSS_MARK} Flutter ${FVM_FLUTTER_VERSION} 全局配置失败${NC}"
+        return 1
+    fi
+
+    if ! "${HOME}/.local/bin/flutter" --version >/dev/null 2>&1; then
+        echo -e "${BOLD_RED}${CROSS_MARK} flutter 命令验证失败${NC}"
+        echo -e "${YELLOW}请执行 source 你的 shell 配置后重试${NC}"
+        return 1
+    fi
+
+    if ! "${HOME}/.local/bin/dart" --version >/dev/null 2>&1; then
+        echo -e "${BOLD_RED}${CROSS_MARK} dart 命令验证失败${NC}"
+        echo -e "${YELLOW}请执行 source 你的 shell 配置后重试${NC}"
+        return 1
+    fi
+
     echo -e "${GREEN}${CHECK_MARK} Flutter ${FVM_FLUTTER_VERSION} 已准备完成${NC}"
     echo ""
 

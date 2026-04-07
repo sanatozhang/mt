@@ -54,6 +54,7 @@ mt init
 - 检测是否安装 Homebrew；未安装则提示先安装
 - 检测是否安装 FVM；未安装则通过 Homebrew 安装
 - 使用 FVM 安装并配置 Flutter `3.38.9`
+- 写入 shell 环境，并创建 `fvm` / `flutter` / `dart` 命令入口
 - 执行 `mt clone` 克隆 Plaud-App 仓库
 
 克隆完成后即可直接使用，`mt` 不再依赖 `.mt-config.yaml`。

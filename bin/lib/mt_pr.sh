@@ -1,5 +1,11 @@
 # GitHub PR 相关函数
 
+github_api_curl() {
+    local connect_timeout="${MT_GITHUB_API_CONNECT_TIMEOUT:-10}"
+    local max_time="${MT_GITHUB_API_MAX_TIME:-30}"
+    curl --connect-timeout "$connect_timeout" --max-time "$max_time" "$@"
+}
+
 # 获取 GitHub token
 get_github_token() {
     local token_file="${PROJECT_ROOT}/github.token"
@@ -149,9 +155,9 @@ get_github_user_display_name() {
     fi
 
     local response
-    response=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+    response=$(github_api_curl -s -H "Accept: application/vnd.github.v3+json" \
         -H "Authorization: token ${github_token}" \
-        "https://api.github.com/user" 2>/dev/null)
+        "https://api.github.com/user" 2>/dev/null || true)
 
     local display
     display=$(echo "$response" | extract_github_user_display)
@@ -191,7 +197,7 @@ EOF
 )
 
     local response
-    response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+    response=$(github_api_curl -s -w "\n%{http_code}" -X POST "$api_url" \
         -H "Accept: application/vnd.github.v3+json" \
         -H "Authorization: token ${github_token}" \
         -H "Content-Type: application/json" \
@@ -230,7 +236,7 @@ EOF
 )
 
     local response
-    response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+    response=$(github_api_curl -s -w "\n%{http_code}" -X POST "$api_url" \
         -H "Accept: application/vnd.github.v3+json" \
         -H "Authorization: token ${github_token}" \
         -H "Content-Type: application/json" \
@@ -274,7 +280,7 @@ EOF
 )
 
         local response
-        response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+        response=$(github_api_curl -s -w "\n%{http_code}" -X POST "$api_url" \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${github_token}" \
             -H "Content-Type: application/json" \
@@ -372,7 +378,7 @@ get_pull_request_record_by_state() {
         [[ -z "$head_param" ]] && continue
 
         if [[ -n "$target_branch" ]]; then
-            response=$(curl -s -G "$api_url" \
+            response=$(github_api_curl -s -G "$api_url" \
                 --data-urlencode "head=${head_param}" \
                 --data-urlencode "base=${target_branch}" \
                 --data-urlencode "state=${pr_state}" \
@@ -386,7 +392,7 @@ get_pull_request_record_by_state() {
             fi
         fi
 
-        response=$(curl -s -G "$api_url" \
+        response=$(github_api_curl -s -G "$api_url" \
             --data-urlencode "head=${head_param}" \
             --data-urlencode "state=${pr_state}" \
             --data-urlencode "per_page=1" \
@@ -521,8 +527,9 @@ create_github_pr() {
 
     IFS='|' read -r name path url <<< "$repo_info"
 
-    local repo_full_name
-    repo_full_name=$(get_repo_info "$repo_path")
+    local repo_full_name=""
+    local repo_info_exit_code=0
+    capture_command_output repo_full_name repo_info_exit_code get_repo_info "$repo_path"
     if [[ -z "$repo_full_name" ]]; then
         echo -e "${BOLD_RED}错误: 无法获取仓库信息: ${path}${NC}"
         return 1
@@ -585,11 +592,11 @@ EOF
 )
 
     local response
-    response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+    response=$(github_api_curl -s -w "\n%{http_code}" -X POST "$api_url" \
         -H "Accept: application/vnd.github.v3+json" \
         -H "Authorization: token ${github_token}" \
         -H "Content-Type: application/json" \
-        -d "$json_data" 2>&1)
+        -d "$json_data" 2>&1 || true)
 
     local http_code
     http_code=$(echo "$response" | tail -n1)
@@ -752,14 +759,15 @@ update_pr_description() {
 
     IFS='|' read -r name path url <<< "$repo_info"
 
-    local repo_full_name
-    repo_full_name=$(get_repo_info "$repo_path")
+    local repo_full_name=""
+    local repo_info_exit_code=0
+    capture_command_output repo_full_name repo_info_exit_code get_repo_info "$repo_path"
     if [[ -z "$repo_full_name" ]]; then
         return 1
     fi
 
     local pr_number
-    pr_number=$(echo "$pr_url" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+')
+    pr_number=$(echo "$pr_url" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+' || true)
     if [[ -z "$pr_number" ]]; then
         return 1
     fi
@@ -781,11 +789,11 @@ EOF
     echo -e "${CYAN}  → Head: Authorization: token ***${NC}"
 
     local response
-    response=$(curl -s -w "\n%{http_code}" -X PATCH "$api_url" \
+    response=$(github_api_curl -s -w "\n%{http_code}" -X PATCH "$api_url" \
         -H "Accept: application/vnd.github.v3+json" \
         -H "Authorization: token ${github_token}" \
         -H "Content-Type: application/json" \
-        -d "$json_data" 2>&1)
+        -d "$json_data" 2>&1 || true)
 
     local http_code
     http_code=$(echo "$response" | tail -n1)
@@ -809,9 +817,9 @@ mark_pr_ready_for_review() {
 
     local api_url="https://api.github.com/repos/${repo_full_name}/pulls/${pr_number}/ready_for_review"
     local response
-    response=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+    response=$(github_api_curl -s -w "\n%{http_code}" -X POST "$api_url" \
         -H "Accept: application/vnd.github.v3+json" \
-        -H "Authorization: token ${github_token}" 2>&1)
+        -H "Authorization: token ${github_token}" 2>&1 || true)
 
     local http_code
     http_code=$(echo "$response" | tail -n1)
@@ -836,9 +844,9 @@ create_prs() {
     local description="${3:-}"
     local ready_for_review="${4:-false}"
 
-    local github_token
-    github_token=$(get_github_token 2>&1)
-    local token_exit_code=$?
+    local github_token=""
+    local token_exit_code=0
+    capture_command_output github_token token_exit_code get_github_token
     if [[ $token_exit_code -ne 0 ]] || [[ -z "$github_token" ]]; then
         echo -e "${BOLD_RED}错误: 未找到 GitHub token${NC}" >&2
         echo -e "${YELLOW}请使用以下命令设置 GitHub token:${NC}" >&2
@@ -912,8 +920,9 @@ create_prs() {
             continue
         fi
 
-        local current_branch
-        current_branch=$(get_current_branch "$repo_path")
+        local current_branch=""
+        local current_branch_exit_code=0
+        capture_command_output current_branch current_branch_exit_code get_current_branch "$repo_path"
         if [[ -z "$current_branch" ]]; then
             echo -e "${YELLOW}  ⏭  跳过: 无法获取当前分支${NC}"
             pr_status_names+=("$name")
@@ -1041,15 +1050,16 @@ create_prs() {
 
         local pr_title="${title:-}"
         if [[ -z "$pr_title" ]]; then
-            pr_title=$(get_latest_commit_message "$repo_path")
+            capture_command_output pr_title current_branch_exit_code get_latest_commit_message "$repo_path"
             if [[ -z "$pr_title" ]]; then
                 pr_title="$current_branch"
             fi
         fi
         local pr_description="${description:-}"
 
-        local repo_full_name
-        repo_full_name=$(get_repo_info "$repo_path")
+        local repo_full_name=""
+        local repo_full_name_exit_code=0
+        capture_command_output repo_full_name repo_full_name_exit_code get_repo_info "$repo_path"
         local existing_pr_url=""
         if [[ -n "$repo_full_name" ]]; then
             existing_pr_url=$(get_existing_pr_url "$repo_full_name" "$current_branch" "$target_branch" "$github_token" 2>/dev/null || echo "")
@@ -1100,9 +1110,9 @@ create_prs() {
         else
             local temp_stderr
             temp_stderr=$(mktemp)
-            local pr_url
-            pr_url=$(create_github_pr "$repo_path" "$repo_info" "$current_branch" "$target_branch" "$pr_title" "$pr_description" "$github_token" 2>"$temp_stderr")
-            local pr_exit_code=$?
+            local pr_url=""
+            local pr_exit_code=0
+            capture_command_output pr_url pr_exit_code create_github_pr "$repo_path" "$repo_info" "$current_branch" "$target_branch" "$pr_title" "$pr_description" "$github_token" 2>"$temp_stderr"
             local pr_error_output
             pr_error_output=$(cat "$temp_stderr" 2>/dev/null)
             rm -f "$temp_stderr"

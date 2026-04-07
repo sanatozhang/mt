@@ -45,6 +45,7 @@ mt init My-Plaud-App
 - 检测 Homebrew
 - 检测并安装 FVM
 - 安装并配置 Flutter `3.38.9`
+- 写入 shell 环境，并创建 `fvm` / `flutter` / `dart` 命令入口
 - 执行 `mt clone` 拉取 Plaud-App 代码
 
 初始化完成后建议先检查一次环境：
