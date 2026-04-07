@@ -599,17 +599,8 @@ capture_command_exit() {
     shift
 
     local exit_code=0
-    local had_errexit=false
-    case $- in
-        *e*) had_errexit=true ;;
-    esac
-
-    set +e
     "$@"
     exit_code=$?
-    if [[ "$had_errexit" == "true" ]]; then
-        set -e
-    fi
 
     printf -v "$__result_var" '%s' "$exit_code"
     return 0
@@ -622,17 +613,8 @@ capture_command_output() {
 
     local output=""
     local exit_code=0
-    local had_errexit=false
-    case $- in
-        *e*) had_errexit=true ;;
-    esac
-
-    set +e
     output="$("$@")"
     exit_code=$?
-    if [[ "$had_errexit" == "true" ]]; then
-        set -e
-    fi
 
     printf -v "$__output_var" '%s' "$output"
     printf -v "$__result_var" '%s' "$exit_code"

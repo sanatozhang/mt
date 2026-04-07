@@ -749,10 +749,8 @@ build_check() {
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${YELLOW}构建 CN 版本${NC}"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    set +e
     _build_android_internal cn "$build_type" "" "false" "true" 2>&1
     local cn_exit_code=$?
-    set -e
 
     if [[ $cn_exit_code -eq 0 ]]; then
         echo -e "${BOLD_GREEN}${CHECK_MARK} CN 构建成功${NC}"
@@ -766,10 +764,8 @@ build_check() {
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${YELLOW}构建 Global 版本${NC}"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    set +e
     _build_android_internal global "$build_type" "" "false" "true" 2>&1
     local global_exit_code=$?
-    set -e
 
     if [[ $global_exit_code -eq 0 ]]; then
         echo -e "${BOLD_GREEN}${CHECK_MARK} Global 构建成功${NC}"

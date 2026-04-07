@@ -422,10 +422,8 @@ run_command() {
             fi
         elif [[ "${git_args[0]}" == "diff" ]]; then
             local diff_probe_exit=0
-            set +e
             (cd "$repo_path" && git diff --quiet "${git_args[@]:1}" 2>/dev/null)
             diff_probe_exit=$?
-            set -e
 
             if [[ $diff_probe_exit -eq 0 ]]; then
                 if ! is_json_output; then
