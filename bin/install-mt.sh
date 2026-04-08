@@ -5,7 +5,7 @@
 #
 # 使用方式：
 #   1. 从 GitHub 直接安装：
-#      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sanatozhang/mt/refs/heads/main/bin/install-mt.sh)"
+#      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sanatozhang/mt/main/bin/install-mt.sh)"
 #   2. 在已克隆的仓库中安装：
 #      ./bin/install-mt.sh
 #
@@ -21,9 +21,11 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # GitHub 仓库信息
-GITHUB_REPO="git@github.com:sanatozhang/mt.git"
-GITHUB_BRANCH="main"
+GITHUB_REPO="${MT_GITHUB_REPO:-git@github.com:sanatozhang/mt.git}"
+GITHUB_HTTPS_REPO="${MT_GITHUB_HTTPS_REPO:-https://github.com/sanatozhang/mt.git}"
+GITHUB_BRANCH="${MT_GITHUB_BRANCH:-main}"
 MT_REPO_NAME="mt"
+INSTALL_DIR="${MT_INSTALL_DIR:-${HOME}/.local/share/${MT_REPO_NAME}}"
 
 # 检测是否是从远程 URL 直接执行的
 is_remote_execution() {
@@ -55,67 +57,68 @@ is_remote_execution() {
 
 # 从 GitHub 克隆仓库
 clone_repository() {
-    local install_dir="${HOME}/.local/share/${MT_REPO_NAME}"
+    local install_dir="${INSTALL_DIR}"
     
-    echo -e "${BLUE}正在从 GitHub 克隆 mt 仓库...${NC}"
-    echo -e "${CYAN}仓库地址: ${GITHUB_REPO}${NC}"
-    echo -e "${CYAN}安装目录: ${install_dir}${NC}"
-    echo ""
+    echo -e "${BLUE}正在从 GitHub 克隆 mt 仓库...${NC}" >&2
+    echo -e "${CYAN}仓库地址: ${GITHUB_REPO}${NC}" >&2
+    echo -e "${CYAN}安装目录: ${install_dir}${NC}" >&2
+    echo "" >&2
     
     # 如果目录已存在，检查是否是 Git 仓库
     if [[ -d "$install_dir" ]]; then
         if [[ -d "${install_dir}/.git" ]]; then
-            echo -e "${YELLOW}检测到已存在的 Git 仓库: ${install_dir}${NC}"
-            echo -e "${BLUE}可以使用 'mt upgrade' 命令更新到最新版本${NC}"
-            echo -e "${BLUE}或删除目录后重新安装以获取最新代码${NC}"
+            echo -e "${YELLOW}检测到已存在的 Git 仓库: ${install_dir}${NC}" >&2
+            echo -e "${BLUE}可以使用 'mt upgrade' 命令更新到最新版本${NC}" >&2
+            echo -e "${BLUE}或删除目录后重新安装以获取最新代码${NC}" >&2
             read -p "是否删除并重新克隆? (y/N): " -n 1 -r
-            echo
+            echo >&2
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                echo -e "${BLUE}正在删除旧目录...${NC}"
+                echo -e "${BLUE}正在删除旧目录...${NC}" >&2
                 rm -rf "$install_dir"
             else
-                echo -e "${BLUE}使用现有仓库${NC}"
+                echo -e "${BLUE}使用现有仓库${NC}" >&2
                 echo "$install_dir"
                 return 0
             fi
         else
-            echo -e "${YELLOW}检测到已存在的目录（非 Git 仓库）: ${install_dir}${NC}"
+            echo -e "${YELLOW}检测到已存在的目录（非 Git 仓库）: ${install_dir}${NC}" >&2
             read -p "是否删除并重新克隆? (y/N): " -n 1 -r
-            echo
+            echo >&2
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 rm -rf "$install_dir"
             else
-                echo -e "${RED}错误: 目录已存在且不是 Git 仓库${NC}"
+                echo -e "${RED}错误: 目录已存在且不是 Git 仓库${NC}" >&2
                 return 1
             fi
         fi
     fi
     
     # 优先尝试使用 SSH 克隆仓库
-    echo -e "${BLUE}尝试使用 SSH 方式克隆...${NC}"
-    if git clone -b "$GITHUB_BRANCH" "$GITHUB_REPO" "$install_dir" 2>&1; then
-        echo -e "${GREEN}✓ 仓库克隆成功（使用 SSH）${NC}"
-        echo -e "${BLUE}源码已保存到: ${install_dir}${NC}"
-        echo -e "${BLUE}后续可以使用 'mt upgrade' 命令更新${NC}"
+    echo -e "${BLUE}尝试使用 SSH 方式克隆...${NC}" >&2
+    if git clone -b "$GITHUB_BRANCH" "$GITHUB_REPO" "$install_dir" >&2; then
+        echo -e "${GREEN}✓ 仓库克隆成功（使用 SSH）${NC}" >&2
+        echo -e "${BLUE}源码已保存到: ${install_dir}${NC}" >&2
+        echo -e "${BLUE}后续可以使用 'mt upgrade' 命令更新${NC}" >&2
         echo "$install_dir"
         return 0
     else
         # SSH 克隆失败，回退到 HTTPS 方式
-        echo -e "${YELLOW}SSH 克隆失败，尝试使用 HTTPS 方式...${NC}"
-        local https_repo="https://github.com/sanatozhang/mt.git"
-        if git clone -b "$GITHUB_BRANCH" "$https_repo" "$install_dir" 2>&1; then
-            echo -e "${GREEN}✓ 仓库克隆成功（使用 HTTPS）${NC}"
-            echo -e "${BLUE}源码已保存到: ${install_dir}${NC}"
-            echo -e "${BLUE}后续可以使用 'mt upgrade' 命令更新${NC}"
-            echo -e "${YELLOW}提示: 配置 SSH 密钥后可使用更快的 SSH 方式${NC}"
+        echo -e "${YELLOW}SSH 克隆失败，尝试使用 HTTPS 方式...${NC}" >&2
+        if git clone -b "$GITHUB_BRANCH" "$GITHUB_HTTPS_REPO" "$install_dir" >&2; then
+            echo -e "${GREEN}✓ 仓库克隆成功（使用 HTTPS）${NC}" >&2
+            echo -e "${BLUE}源码已保存到: ${install_dir}${NC}" >&2
+            echo -e "${BLUE}后续可以使用 'mt upgrade' 命令更新${NC}" >&2
+            echo -e "${YELLOW}提示: 配置 SSH 密钥后可使用更快的 SSH 方式${NC}" >&2
             echo "$install_dir"
             return 0
         else
-            echo -e "${RED}错误: 克隆仓库失败${NC}"
-            echo -e "${YELLOW}请检查：${NC}"
-            echo -e "${YELLOW}  1. 网络连接是否正常${NC}"
-            echo -e "${YELLOW}  2. Git 是否已安装${NC}"
-            echo -e "${YELLOW}  3. 是否有访问仓库的权限${NC}"
+            echo -e "${RED}错误: 克隆仓库失败${NC}" >&2
+            echo -e "${YELLOW}请检查：${NC}" >&2
+            echo -e "${YELLOW}  1. 网络连接是否正常${NC}" >&2
+            echo -e "${YELLOW}  2. Git 是否已安装${NC}" >&2
+            echo -e "${YELLOW}  3. 是否有访问仓库的权限${NC}" >&2
+            echo -e "${YELLOW}如果一键安装仍失败，请回退到手动方式：${NC}" >&2
+            echo -e "${CYAN}  git clone ${GITHUB_HTTPS_REPO} && cd ${MT_REPO_NAME} && ./bin/install-mt.sh${NC}" >&2
             return 1
         fi
     fi
@@ -128,8 +131,7 @@ get_script_dir() {
     # 如果是远程执行，返回克隆的目录
     if is_remote_execution; then
         local install_dir
-        install_dir=$(clone_repository)
-        if [[ $? -ne 0 ]]; then
+        if ! install_dir=$(clone_repository); then
             exit 1
         fi
         echo "${install_dir}/bin"
@@ -189,7 +191,12 @@ fi
 
 # 检测 Shell 类型
 detect_shell() {
-    if [[ -n "${ZSH_VERSION:-}" ]]; then
+    local shell_name="${SHELL##*/}"
+    if [[ "$shell_name" == "zsh" ]]; then
+        echo "zsh"
+    elif [[ "$shell_name" == "bash" ]]; then
+        echo "bash"
+    elif [[ -n "${ZSH_VERSION:-}" ]]; then
         echo "zsh"
     elif [[ -n "${BASH_VERSION:-}" ]]; then
         echo "bash"
@@ -385,4 +392,3 @@ main() {
 
 # 执行安装
 main "$@"
-

@@ -5,13 +5,36 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [1.4.1] - 2025-01-16
+## [1.4.2] - 2026-01-26
+
+### 新增功能
+
+#### PR Ready 与 Review 摘要
+- `mt pr -r/--ready` 创建后将 PR 从 Draft 设为 Ready for review
+- Review 群发布摘要增加作者/变更/链接，格式更适合直接转发
+- 摘要追加脚注：本 PR review 由 mt 工具创建
+- `mt init` 现在会检查 Homebrew/FVM、安装 Flutter `3.38.9`，并自动执行仓库克隆
+
+### 改进
+
+#### 多仓库覆盖范围
+- 默认仓库列表固定覆盖 7 个仓库；缺失或未初始化的仓库会自动跳过
+- 移除 `.mt-config.yaml` 运行时依赖，默认 7 仓库改为零配置运行
+- `mt status` 无改动时输出“没有变化”
+- 新增全局仓库筛选与执行控制：`--current`、`--main-only`、`--subrepos-only`、`--only`、`--exclude`、`--dry-run`、`--json`、`--fail-fast`
+- 新增 `mt doctor` 用于检查开发环境、工作区和仓库状态
+- 将 `bin/mt` 按模块拆分为 `bin/lib/*.sh`，入口脚本缩减为轻量加载器，便于维护各命令域
+- `mt go`、`mt rebuild`、`mt init` 等组合命令在任一步骤失败时会明确输出整体失败结果，并返回非零退出码
 
 ### 修复
 
-#### 安装脚本语法错误修复
-- 修复了脚本顶层作用域使用 `local` 关键字导致的语法错误（`local: can only be used in a function`）
-- 将顶层作用域的 `local parent_dir` 改为普通变量声明 `parent_dir`
+#### PR 描述更新异常
+- 修复 `mt pr` 更新 PR 描述时 here-doc 结构错误导致的 `response/http_code` 未定义报错
+- 修复 `mt pr` 误将 closed/merged 历史 PR 当成当前 open PR 的问题，避免部分仓库在汇总中“丢失”
+
+## [1.4.1] - 2025-01-16
+
+### 修复
 
 #### 远程安装环境变量修复
 - **关键修复**：修复了通过 `curl | bash` 方式安装时，mt 工具没有添加到环境变量的问题
@@ -203,4 +226,3 @@
 - 构建命令：prebuild, build, install, build:check, build:ios
 - PR 创建功能（支持 Draft PR、自动添加 Copilot reviewer、MT AUTO 标签）
 - iOS 安装支持（真机设备检测和选择）
-
