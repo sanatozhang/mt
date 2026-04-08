@@ -985,7 +985,7 @@ _install_ios_internal() {
                 if [[ -d "$app" ]] && [[ "$app" == *.app ]]; then
                     local app_name
                     app_name=$(basename "$app" .app)
-                    if [[ "${app_name,,}" == "${scheme,,}" ]]; then
+                    if [[ "$(echo "$app_name" | tr '[:upper:]' '[:lower:]')" == "$(echo "$scheme" | tr '[:upper:]' '[:lower:]')" ]]; then
                         app_files+=("$app")
                     fi
                 fi
@@ -1017,7 +1017,7 @@ _install_ios_internal() {
                 if [[ -d "$app" ]] && [[ "$app" == *.app ]]; then
                     local app_name
                     app_name=$(basename "$app" .app)
-                    if [[ "${app_name,,}" == "${scheme,,}" ]]; then
+                    if [[ "$(echo "$app_name" | tr '[:upper:]' '[:lower:]')" == "$(echo "$scheme" | tr '[:upper:]' '[:lower:]')" ]]; then
                         app_files+=("$app")
                     fi
                 fi
