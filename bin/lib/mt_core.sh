@@ -517,6 +517,84 @@ workspace_contains_main_repositories() {
     return 1
 }
 
+# 检查 candidate_dir 下是否存在任一已注册 profile 的 marker 目录
+# 用于 find_project_root 识别两个项目
+workspace_contains_any_project_marker() {
+    local candidate_dir="$1"
+    local profile_info=""
+
+    for profile_info in "${PROJECT_PROFILES[@]}"; do
+        IFS='|' read -r p_name p_marker _rest <<< "$profile_info"
+        if [[ -n "$p_marker" ]] && [[ -d "${candidate_dir}/${p_marker}" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# 基于 PROJECT_ROOT 检测当前项目 kind: flutter-mt / native-app2 / unknown
+# Profile 顺序敏感: 先匹配先赢
+detect_project_kind() {
+    local probe_root="${1:-$PROJECT_ROOT}"
+    local profile_info=""
+
+    for profile_info in "${PROJECT_PROFILES[@]}"; do
+        IFS='|' read -r p_name p_marker _rest <<< "$profile_info"
+        if [[ -n "$p_marker" ]] && [[ -d "${probe_root}/${p_marker}" ]]; then
+            echo "$p_name"
+            return 0
+        fi
+    done
+
+    echo "unknown"
+    return 1
+}
+
+# 从 PROJECT_PROFILES 中取出指定 kind 的某字段（1-based index）
+# 字段顺序见 bin/mt 中 PROJECT_PROFILES 的注释
+get_profile_field() {
+    local kind="$1"
+    local field_index="$2"
+    local profile_info=""
+
+    for profile_info in "${PROJECT_PROFILES[@]}"; do
+        IFS='|' read -ra fields <<< "$profile_info"
+        if [[ "${fields[0]}" == "$kind" ]]; then
+            local idx=$((field_index - 1))
+            if [[ $idx -ge 0 ]] && [[ $idx -lt ${#fields[@]} ]]; then
+                echo "${fields[$idx]}"
+            fi
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# 打包/安装/clean 等命令调用前的工作区守卫
+# 命中返回 kind 并 echo 出来；未命中打印错误并 exit 1
+require_project_kind() {
+    local kind
+    kind=$(detect_project_kind)
+
+    if [[ "$kind" == "unknown" ]]; then
+        echo -e "${BOLD_RED}错误: 当前目录不在已知工作区${NC}" >&2
+        echo -e "${YELLOW}当前目录: $(pwd)${NC}" >&2
+        echo -e "${YELLOW}PROJECT_ROOT: ${PROJECT_ROOT}${NC}" >&2
+        echo -e "${YELLOW}已支持的工作区:${NC}" >&2
+        local profile_info=""
+        for profile_info in "${PROJECT_PROFILES[@]}"; do
+            IFS='|' read -r p_name p_marker _rest <<< "$profile_info"
+            echo -e "${CYAN}  - ${p_name} (marker: ${p_marker})${NC}" >&2
+        done
+        echo -e "${YELLOW}请 cd 到对应项目根目录后重试${NC}" >&2
+        exit 1
+    fi
+
+    echo "$kind"
+}
+
 directory_is_inside_known_repository() {
     local original_dir="$1"
     local candidate_dir="$2"
@@ -548,7 +626,7 @@ find_project_root() {
             return 0
         fi
 
-        if workspace_contains_main_repositories "$current_dir"; then
+        if workspace_contains_any_project_marker "$current_dir"; then
             echo "$current_dir"
             return 0
         fi

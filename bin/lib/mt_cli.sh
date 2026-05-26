@@ -42,14 +42,33 @@ handle_delete_command() {
 }
 
 handle_clean_command() {
-    clean_cache "$@"
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        _app2_clean_cache "$@"
+    else
+        clean_cache "$@"
+    fi
 }
 
 handle_prebuild_command() {
-    prebuild
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        _app2_prebuild "$@"
+    else
+        prebuild
+    fi
 }
 
 handle_build_command() {
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        if [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
+            _app2_build_android "global" "$@"
+        else
+            _app2_build_android "$@"
+        fi
+        return $?
+    fi
     if [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
         build_android "global" "$@"
     else
@@ -58,14 +77,36 @@ handle_build_command() {
 }
 
 handle_build_check_command() {
-    build_check "$@"
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        _app2_build_check "$@"
+    else
+        build_check "$@"
+    fi
 }
 
 handle_build_ios_command() {
-    build_ios "$@"
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        _app2_build_ios "$@"
+    else
+        build_ios "$@"
+    fi
 }
 
 handle_install_command() {
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        if [[ "${1:-}" == "ios" ]]; then
+            shift
+            _app2_install_ios "$@"
+        elif [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
+            _app2_install_android "global" "$@"
+        else
+            _app2_install_android "$@"
+        fi
+        return $?
+    fi
     if [[ "${1:-}" == "ios" ]]; then
         shift
         install_ios "$@"
@@ -77,10 +118,24 @@ handle_install_command() {
 }
 
 handle_install_ios_command() {
-    install_ios "$@"
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        _app2_install_ios "$@"
+    else
+        install_ios "$@"
+    fi
 }
 
 handle_go_command() {
+    local kind; kind=$(require_project_kind) || exit $?
+    if [[ "$kind" == "native-app2" ]]; then
+        if [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
+            _app2_go_android "global" "$@"
+        else
+            _app2_go_android "$@"
+        fi
+        return $?
+    fi
     if [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
         go_android "global" "$@"
     else
@@ -89,6 +144,8 @@ handle_go_command() {
 }
 
 handle_rebuild_command() {
+    local kind; kind=$(require_project_kind) || exit $?
+
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}  执行 rebuild（清理缓存 + 重新构建）${NC}"
     echo -e "${BLUE}========================================${NC}"
@@ -97,7 +154,11 @@ handle_rebuild_command() {
     echo -e "${CYAN}[1/2] 清理缓存...${NC}"
     echo ""
     local clean_exit_code=0
-    capture_command_exit clean_exit_code clean_cache
+    if [[ "$kind" == "native-app2" ]]; then
+        capture_command_exit clean_exit_code _app2_clean_cache
+    else
+        capture_command_exit clean_exit_code clean_cache
+    fi
     if [[ $clean_exit_code -ne 0 ]]; then
         echo -e "${BOLD_RED}错误: 清理缓存失败${NC}"
         print_composite_failure "rebuild 命令" "clean 步骤失败"
@@ -108,10 +169,18 @@ handle_rebuild_command() {
     echo -e "${CYAN}[2/2] 重新构建...${NC}"
     echo ""
     local go_exit_code=0
-    if [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
-        capture_command_exit go_exit_code go_android "global" "$@"
+    if [[ "$kind" == "native-app2" ]]; then
+        if [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
+            capture_command_exit go_exit_code _app2_go_android "global" "$@"
+        else
+            capture_command_exit go_exit_code _app2_go_android "$@"
+        fi
     else
-        capture_command_exit go_exit_code go_android "$@"
+        if [[ -z "${1:-}" ]] || [[ "${1}" =~ ^- ]]; then
+            capture_command_exit go_exit_code go_android "global" "$@"
+        else
+            capture_command_exit go_exit_code go_android "$@"
+        fi
     fi
 
     if [[ $go_exit_code -ne 0 ]]; then

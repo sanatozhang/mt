@@ -107,6 +107,15 @@ DEFAULT_REPOSITORIES=(
     "PenSubmodules|plaud-ios/PLAUD/PenSubmodules|git@github.com:Plaud-AI/ios-lib-nicebuild-blepen.git"
 )
 
+# 项目 profile 注册表（双轨隔离架构）
+# 字段顺序: name|marker|android_dir|ios_dir|ios_workspace_rel|ios_scheme_cn|ios_scheme_global|harmony_dir|flutter_dirs
+# - marker: PROJECT_ROOT 下存在此目录即匹配该 profile
+# - 字段为空表示该平台/能力不支持
+PROJECT_PROFILES=(
+    "flutter-mt|plaud-android|plaud-android|plaud-ios|plaud-ios/PLAUD/PLAUD.xcworkspace|PLAUD-CN|PLAUD||plaud-flutter-cn,plaud-flutter-global,plaud-flutter-common"
+    "native-app2|plaud-native-android|plaud-native-android|plaud-native-ios|plaud-native-ios/plaud/plaud.xcworkspace|Plaud-CN|Plaud-Global|plaud-native-harmony|"
+)
+
 FVM_BREW_TAP="leoafarias/fvm"
 FVM_FLUTTER_VERSION="3.38.9"
 PLAUD_APP_REPO_URL="git@github.com:Plaud-AI/Plaud-App.git"
@@ -203,6 +212,7 @@ JSON_RESULT_ITEMS=()
 source "${SCRIPT_BIN_DIR}/lib/mt_core.sh"
 source "${SCRIPT_BIN_DIR}/lib/mt_repo.sh"
 source "${SCRIPT_BIN_DIR}/lib/mt_build.sh"
+source "${SCRIPT_BIN_DIR}/lib/mt_build_app2.sh"
 source "${SCRIPT_BIN_DIR}/lib/mt_plaud.sh"
 source "${SCRIPT_BIN_DIR}/lib/mt_pr.sh"
 source "${SCRIPT_BIN_DIR}/lib/mt_cli.sh"
