@@ -645,7 +645,14 @@ find_project_root() {
 PROJECT_ROOT="$(find_project_root "$(pwd)")"
 
 get_repositories() {
-    printf '%s\n' "${DEFAULT_REPOSITORIES[@]}"
+    local kind
+    kind=$(detect_project_kind 2>/dev/null) || true
+    if [[ "$kind" == "native-app2" ]]; then
+        printf '%s\n' "${NATIVE_APP2_REPOSITORIES[@]}"
+    else
+        # flutter-mt / unknown / 其他 → 默认 A 项目仓库列表（向后兼容）
+        printf '%s\n' "${DEFAULT_REPOSITORIES[@]}"
+    fi
 }
 
 is_git_repository_path() {

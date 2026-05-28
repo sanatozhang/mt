@@ -107,6 +107,15 @@ DEFAULT_REPOSITORIES=(
     "PenSubmodules|plaud-ios/PLAUD/PenSubmodules|git@github.com:Plaud-AI/ios-lib-nicebuild-blepen.git"
 )
 
+# native-app2 项目的仓库列表（不含 super-repo 自身，含主仓 + 嵌套 submodule）
+NATIVE_APP2_REPOSITORIES=(
+    "plaud-native-android|plaud-native-android|git@github.com:Plaud-AI/plaud-native-android.git"
+    "plaud-native-ios|plaud-native-ios|git@github.com:Plaud-AI/plaud-native-ios.git"
+    "plaud-native-harmony|plaud-native-harmony|git@github.com:Plaud-AI/plaud-native-harmony.git"
+    "nicebuildSDK|plaud-native-android/nicebuildSDK|git@github.com:Plaud-AI/ble-sdk-android.git"
+    "PenSubmodules|plaud-native-ios/plaud/PenSubmodules|git@github.com:Plaud-AI/ios-lib-nicebuild-blepen.git"
+)
+
 # 项目 profile 注册表（双轨隔离架构）
 # 字段顺序: name|marker|android_dir|ios_dir|ios_workspace_rel|ios_scheme_cn|ios_scheme_global|harmony_dir|flutter_dirs
 # - marker: PROJECT_ROOT 下存在此目录即匹配该 profile
