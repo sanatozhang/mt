@@ -20,6 +20,26 @@ execute_git_command() {
     return $?
 }
 
+# 判断 git 子命令是否是长耗时网络命令（需要流式输出避免"卡死"误判）
+is_long_running_git_command() {
+    local sub_cmd="${1:-}"
+    case "$sub_cmd" in
+        fetch|pull|push|clone)
+            return 0
+            ;;
+        submodule)
+            local sub_arg=""
+            for sub_arg in "${@:2}"; do
+                case "$sub_arg" in
+                    update|sync|foreach) return 0 ;;
+                esac
+            done
+            return 1
+            ;;
+    esac
+    return 1
+}
+
 format_output() {
     local index=$1
     local total=$2
@@ -466,9 +486,26 @@ run_command() {
             print_command "$repo_path" git "${git_args[@]}"
         fi
 
+        local streamed=false
         if [[ "$status_clean" == "true" ]]; then
             output="没有变化"
             exit_code=0
+        elif is_long_running_git_command "${git_args[@]}" && ! is_json_output; then
+            # 长耗时网络命令: 实时流式输出，避免用户误判"卡死"
+            echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
+            echo -e "${YELLOW}  ⏳ 网络命令执行中（请耐心等待，不要中断）...${NC}"
+            local _tmp_out
+            _tmp_out=$(mktemp -t mt_git_out.XXXXXX 2>/dev/null) || _tmp_out="/tmp/mt_git_out.$$"
+            # 用 tee 同时实时显示给用户 + 落盘以便后续 JSON / 失败回放
+            set +o pipefail 2>/dev/null || true
+            execute_git_command "$repo_info" "${git_args[@]}" 2>&1 \
+                | awk '{ print "    " $0; fflush() }' \
+                | tee "$_tmp_out"
+            exit_code=${PIPESTATUS[0]:-0}
+            # 因为已用 tee 实时显示，重新读 output 仅用于 JSON / 后续摘要
+            output=$(cat "$_tmp_out" 2>/dev/null || echo "")
+            rm -f "$_tmp_out" 2>/dev/null || true
+            streamed=true
         else
             output=$(execute_git_command "$repo_info" "${git_args[@]}" 2>&1) || exit_code=$?
         fi
@@ -477,13 +514,24 @@ run_command() {
             ((success_count++))
             json_add_result "$name" "success" "$path" "${output:-执行成功}"
             if ! is_json_output; then
-                format_output "$index" "$total" "$name" "0" "$output" "${git_args[@]}"
+                if [[ "$streamed" == "true" ]]; then
+                    # 流式分支已实时打印 output，只补一个成功摘要行
+                    echo -e "${BOLD_GREEN}  ${CHECK_MARK} 执行成功${NC}"
+                    echo ""
+                else
+                    format_output "$index" "$total" "$name" "0" "$output" "${git_args[@]}"
+                fi
             fi
         else
             failed_repos+=("$name")
             json_add_result "$name" "failed" "$path" "${output:-执行失败}"
             if ! is_json_output; then
-                format_output "$index" "$total" "$name" "1" "$output" "${git_args[@]}"
+                if [[ "$streamed" == "true" ]]; then
+                    echo -e "${BOLD_RED}  ${CROSS_MARK} 执行失败${NC}"
+                    echo ""
+                else
+                    format_output "$index" "$total" "$name" "1" "$output" "${git_args[@]}"
+                fi
             fi
             if [[ "$GLOBAL_FAIL_FAST" == "true" ]]; then
                 break
