@@ -92,7 +92,7 @@ CHECK_MARK="✓"
 CROSS_MARK="✗"
 ARROW="→"
 
-VERSION="1.4.2"
+VERSION="2.0.0"
 
 GITHUB_REPO="sanatozhang/mt"
 GITHUB_BRANCH="main"

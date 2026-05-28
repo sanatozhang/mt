@@ -5,6 +5,56 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.0.0] - 2026-05-28
+
+### 重大更新
+
+#### 同时支持 Plaud-Flutter 和 Plaud-Native 两个项目
+mt 从此可以在两类工作区下零差异使用：
+- **flutter-mt**：原有的 Flutter + Native 混合工程（marker: `plaud-android`），默认 7 仓库
+- **native-app2**：全新 Plaud 纯 Native 工程（marker: `plaud-native-android`），5 仓库
+
+mt 会自动按 `cwd` 识别当前工作区类型并切换底层实现，命令名、参数、产物路径与原有用法完全一致。
+
+### 新增功能
+
+#### 项目识别与守卫
+- 新增 `PROJECT_PROFILES` 注册表（在 `bin/mt`），声明两类工作区的目录布局
+- 新增 `detect_project_kind` / `require_project_kind` 守卫函数
+- 在 A/B 项目之外执行打包/安装类命令时，给出友好错误并列出已支持的工作区
+
+#### native-app2 打包闭环
+- `mt build [cn|global] [-d/-r/-p] [-c <channel>] [-a]`：调用 `plaud-native-android/switch_flavor.sh` + `gradlew assemble*`
+  - 完整支持 7 个 cn 渠道：official / huawei / xiaomi / oppo / vivo / honor / yingyongbao
+- `mt build:ios [cn|global] [-d/-r]`：调用 `xcodebuild build` + scheme `Plaud-CN`/`Plaud-Global`，产出 `.app`
+- `mt install` / `mt install:ios`：构建完成后自动安装到设备（adb / xcrun devicectl / ios-deploy）
+- `mt prebuild`：依次执行 `plaud-native-android/build.sh` 与 `plaud-native-ios/scripts/start/build.sh`，处理翻译、埋点、CocoaPods 等
+- `mt go` / `mt rebuild` / `mt build:check` / `mt clean`：全部支持 native-app2
+
+#### native-app2 Git 多仓库支持
+- 新增 `NATIVE_APP2_REPOSITORIES` 列表（5 条）：`plaud-native-android` / `plaud-native-ios` / `plaud-native-harmony` + 两个嵌套子模块 `nicebuildSDK` / `PenSubmodules`
+- `mt status` / `mt branch` / `mt checkout` / `mt pull` / `mt push` / `mt list` / `mt pr` 等所有 git 多仓库命令在 native-app2 下自动按新列表执行
+- `--current` / `--main-only` / `--subrepos-only` / `--only` / `--exclude` 等全局过滤选项行为不变
+
+### 架构
+
+#### 双轨隔离设计
+- 新增 `bin/lib/mt_build_app2.sh`（~800 行），承载 native-app2 全部 `_app2_*` 实现
+- 原有 `bin/lib/mt_build.sh` 内部函数（`_build_android_internal` / `_build_ios_internal` / `prebuild` / `clean_cache` 等）**一行未改**
+- 分发发生在 `bin/lib/mt_cli.sh` 的 `handle_*` 入口层，对 flutter-mt 项目调用链与改造前完全一致
+- 仓库列表分发集中在 `mt_core.sh:get_repositories`，按 `detect_project_kind` 路由
+
+### 改进
+
+- `find_project_root` 现在能识别任一已注册 profile 的 marker（向上溯源时既兼容 A 又兼容 B）
+- 错误提示更清晰：未识别工作区时会列出已支持的项目名与 marker
+
+### 不变（向后兼容）
+
+- flutter-mt 项目下所有命令的行为、输出、产物路径、错误信息与 1.4.2 完全一致
+- `DEFAULT_REPOSITORIES` 的 7 个仓库定义未做任何修改
+- 安装方式、`mt upgrade`、`mt init` 等环境工具链无变化
+
 ## [1.4.2] - 2026-01-26
 
 ### 新增功能
