@@ -92,7 +92,7 @@ CHECK_MARK="✓"
 CROSS_MARK="✗"
 ARROW="→"
 
-VERSION="2.0.0"
+VERSION="2.0.1"
 
 GITHUB_REPO="sanatozhang/mt"
 GITHUB_BRANCH="main"
@@ -189,6 +189,7 @@ REGISTERED_COMMANDS=(
     "clone|handle_clone_command|tool|克隆 Plaud-App 仓库并初始化子模块"
     "set-github-token|handle_set_github_token_command|tool|设置 GitHub token"
     "delete|handle_delete_command|tool|删除本地分支"
+    "sync|handle_sync_command|tool|同步上游：fetch + rebase origin/<base>（可选 --push）"
     "clean|handle_clean_command|tool|清除缓存"
     "upgrade|handle_upgrade_command|tool|升级 mt 工具"
     "prebuild|handle_prebuild_command|build|执行 Flutter 预构建（pub get/多语言等）"

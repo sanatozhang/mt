@@ -5,6 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.0.1] - 2026-05-28
+
+### 新增
+
+#### `mt sync` 一键同步上游
+- 新命令 `mt sync [base_branch] [--push]`：对每个仓库执行 `git fetch origin <base>` + `git rebase origin/<base>`
+- 当前分支 == base 时自动改走 `git pull --ff-only`，避免 rebase 自己
+- 工作区脏 / detached HEAD 自动跳过并清晰列出原因，不会破坏未提交修改
+- rebase 冲突时自动 `git rebase --abort` 保护工作区，记录失败仓库继续处理其他仓库
+- `--push` 选项：rebase 完成后 `git push --force-with-lease` 到当前分支远端
+- 默认 base = `main`，可指定其他基线（如 `mt sync development`）
+
+### 修复
+
+#### `mt pull/fetch/push/clone` 长耗时网络命令"看似卡死"
+- 之前 `run_command` 把整段输出 capture 后才打印，网络命令在慢仓库可静默 30 秒以上
+- 新增 `is_long_running_git_command` 白名单（fetch/pull/push/clone/submodule update|sync|foreach），这类命令走 `tee` 流式输出 + 落盘 capture 的双轨分支
+- 用户能实时看到 `From github.com:... -> FETCH_HEAD` 之类的真实进度
+- 短命令（status/branch/log/diff 等）仍走原有 `format_output` 着色路径，输出风格不变
+
 ## [2.0.0] - 2026-05-28
 
 ### 重大更新

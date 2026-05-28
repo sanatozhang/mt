@@ -1815,3 +1815,183 @@ PR 示例:
   查看 mt/doc/README.md 获取详细文档
 EOF
 }
+
+# mt sync: 对每个仓库做 fetch + rebase origin/<base>，可选 push
+# 用法: mt sync [base_branch] [--push]
+#   - 默认 base = main
+#   - 当前分支 == base：跳过 rebase，跑 pull --ff-only
+#   - rebase 冲突: 自动 git rebase --abort，记录失败仓库，不影响其他仓库继续
+#   - --push: rebase 完成后 push --force-with-lease 到当前分支远端
+sync_repositories() {
+    local base_branch="main"
+    local do_push=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --push)
+                do_push=true; shift ;;
+            -h|--help)
+                echo "用法: mt sync [base_branch] [--push]"
+                echo "  base_branch  上游基线分支，默认 main"
+                echo "  --push       rebase 后 push --force-with-lease 到当前分支远端"
+                return 0
+                ;;
+            -*)
+                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                return 1
+                ;;
+            *)
+                base_branch="$1"; shift ;;
+        esac
+    done
+
+    local repos_array=()
+    while IFS= read -r line; do
+        repos_array+=("$line")
+    done < <(get_selected_repositories)
+
+    if [[ -z "${repos_array[*]-}" ]]; then
+        echo -e "${BOLD_RED}错误: 没有匹配到任何仓库${NC}"
+        return 1
+    fi
+
+    local total=${#repos_array[@]}
+    local success_count=0
+    local conflict_count=0
+    local skipped_count=0
+    local pushed_count=0
+    local conflict_repos=()
+    local skipped_repos=()
+    local pushed_repos=()
+
+    echo -e "${BOLD_BLUE}mt sync: 同步上游 origin/${base_branch}${NC}"
+    echo -e "${BOLD_BLUE}仓库数量: ${total}${NC}"
+    if [[ "$do_push" == "true" ]]; then
+        echo -e "${YELLOW}已启用 --push: rebase 后将 push --force-with-lease${NC}"
+    fi
+    echo ""
+
+    for i in "${!repos_array[@]}"; do
+        local repo_info="${repos_array[$i]}"
+        IFS='|' read -r name path url <<< "$repo_info"
+        local index=$((i + 1))
+        local repo_path="${PROJECT_ROOT}/${path}"
+
+        echo -e "${BOLD_BLUE}[${index}/${total}] ${name}${NC}"
+
+        if [[ ! -d "$repo_path" ]]; then
+            echo -e "${YELLOW}  ⏭  跳过: 路径不存在${NC}"
+            echo ""
+            ((skipped_count++))
+            skipped_repos+=("$name")
+            continue
+        fi
+
+        if ! is_git_repository_path "$repo_path"; then
+            echo -e "${YELLOW}  ⏭  跳过: 不是 Git 仓库${NC}"
+            echo ""
+            ((skipped_count++))
+            skipped_repos+=("$name")
+            continue
+        fi
+
+        # 工作区不干净就跳过（避免破坏未提交修改）
+        local porcelain
+        porcelain=$(cd "$repo_path" && git status --porcelain 2>/dev/null)
+        if [[ -n "$porcelain" ]]; then
+            echo -e "${BOLD_YELLOW}  ⏭  跳过: 工作区有未提交修改，请先 commit/stash${NC}"
+            (cd "$repo_path" && git status --short 2>&1 | head -5 | awk '{ print "      " $0 }')
+            echo ""
+            ((skipped_count++))
+            skipped_repos+=("$name (dirty)")
+            continue
+        fi
+
+        local current_branch
+        current_branch=$(cd "$repo_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        if [[ -z "$current_branch" ]] || [[ "$current_branch" == "HEAD" ]]; then
+            echo -e "${BOLD_YELLOW}  ⏭  跳过: 处于 detached HEAD${NC}"
+            echo ""
+            ((skipped_count++))
+            skipped_repos+=("$name (detached)")
+            continue
+        fi
+
+        echo -e "${CYAN}  当前分支: ${current_branch}${NC}"
+
+        # 1. fetch
+        echo -e "${CYAN}  → git fetch origin ${base_branch}${NC}"
+        if ! (cd "$repo_path" && git fetch origin "$base_branch" 2>&1 | awk '{ print "    " $0; fflush() }'); then
+            echo -e "${BOLD_RED}  ${CROSS_MARK} fetch 失败${NC}"
+            echo ""
+            ((conflict_count++))
+            conflict_repos+=("$name (fetch failed)")
+            continue
+        fi
+
+        # 2. rebase 或 ff
+        if [[ "$current_branch" == "$base_branch" ]]; then
+            echo -e "${CYAN}  → git pull --ff-only origin ${base_branch} (当前分支 == 基线，无需 rebase)${NC}"
+            if (cd "$repo_path" && git pull --ff-only origin "$base_branch" 2>&1 | awk '{ print "    " $0; fflush() }'); then
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 同步完成${NC}"
+                ((success_count++))
+            else
+                echo -e "${BOLD_RED}  ${CROSS_MARK} ff-only 失败（本地与远端已分叉）${NC}"
+                ((conflict_count++))
+                conflict_repos+=("$name (ff failed)")
+                echo ""
+                continue
+            fi
+        else
+            echo -e "${CYAN}  → git rebase origin/${base_branch}${NC}"
+            local rebase_output
+            rebase_output=$(cd "$repo_path" && git rebase "origin/${base_branch}" 2>&1)
+            local rebase_exit=$?
+            echo "$rebase_output" | awk '{ print "    " $0 }'
+
+            if [[ $rebase_exit -ne 0 ]]; then
+                echo -e "${BOLD_RED}  ${CROSS_MARK} rebase 冲突，自动 abort${NC}"
+                (cd "$repo_path" && git rebase --abort 2>/dev/null) || true
+                ((conflict_count++))
+                conflict_repos+=("$name (rebase conflict)")
+                echo ""
+                continue
+            fi
+            echo -e "${BOLD_GREEN}  ${CHECK_MARK} rebase 完成${NC}"
+            ((success_count++))
+        fi
+
+        # 3. 可选 push
+        if [[ "$do_push" == "true" ]]; then
+            echo -e "${CYAN}  → git push --force-with-lease origin ${current_branch}${NC}"
+            if (cd "$repo_path" && git push --force-with-lease origin "$current_branch" 2>&1 | awk '{ print "    " $0; fflush() }'); then
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} push 完成${NC}"
+                ((pushed_count++))
+                pushed_repos+=("$name")
+            else
+                echo -e "${BOLD_RED}  ${CROSS_MARK} push 失败（远端可能已被他人更新，需手动处理）${NC}"
+            fi
+        fi
+
+        echo ""
+    done
+
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} 同步成功: ${success_count}/${total}${NC}"
+    if [[ $pushed_count -gt 0 ]]; then
+        echo -e "${BOLD_GREEN}${CHECK_MARK} push 成功: ${pushed_count}${NC}"
+    fi
+    if [[ $skipped_count -gt 0 ]]; then
+        echo -e "${YELLOW}⏭  跳过: ${skipped_count} (${skipped_repos[*]})${NC}"
+    fi
+    if [[ $conflict_count -gt 0 ]]; then
+        echo -e "${BOLD_RED}${CROSS_MARK} 冲突/失败: ${conflict_count} (${conflict_repos[*]})${NC}"
+        echo -e "${YELLOW}请到这些仓库手动解决（rebase 已自动 abort，工作区已恢复）${NC}"
+    fi
+    echo -e "${BLUE}========================================${NC}"
+
+    if [[ $conflict_count -gt 0 ]]; then
+        return 1
+    fi
+    return 0
+}

@@ -41,6 +41,10 @@ handle_delete_command() {
     delete_branches "$@"
 }
 
+handle_sync_command() {
+    sync_repositories "$@"
+}
+
 handle_clean_command() {
     local kind; kind=$(require_project_kind) || exit $?
     if [[ "$kind" == "native-app2" ]]; then
