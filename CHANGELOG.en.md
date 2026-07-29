@@ -7,6 +7,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-07-29
+
+### Added
+
+#### Plaud-App 4.0 (Native mono-repo) support, now the default
+- Added `clone_native_app2()` (`bin/lib/mt_repo.sh`): clones the 4.0 main repo `plaud-native-app.git`, runs `git submodule update --init --recursive`, and separately clones the two nested sub-repos `nicebuildSDK` and `PenSubmodules` (paths/URLs reuse the existing `NATIVE_APP2_REPOSITORIES`)
+- `mt clone` / `mt init` gained `--v3` / `--v4` flags to explicitly pick which version to clone; with no flag, both commands prompt interactively (default **Native 4.0** — press Enter to accept), and silently default to 4.0 with no TTY attached (scripts/CI), never blocking
+- **4.0 (default)**: `mt init` skips the Homebrew/FVM/Flutter bootstrap entirely — equivalent to running `mt clone --v4` directly
+- **3.0 (`--v3`, legacy Flutter + Native hybrid project)**: `mt init --v3` is unchanged (Homebrew → FVM → Flutter `3.38.9` → clone `Plaud-App`); when `mt clone`'s interactive prompt resolves to 3.0, it advises running `mt init --v3` instead and requires confirmation before continuing with clone-only
+- Both READMEs now default to showing the 4.0 flow; the full 3.0 setup guide moved to the new [doc/CLONE_V3.md](doc/CLONE_V3.md) *(Chinese only)*
+
+### Changed (default behavior)
+
+- The no-argument default for `mt init` / `mt clone` changed from 3.0 (`Plaud-App`) to 4.0 (`Plaud-Native-App`). If you're still maintaining a 3.0 project, pass `--v3` explicitly — see `doc/CLONE_V3.md` for the full guide
+
 ## [2.1.0] - 2026-07-29
 
 ### Added

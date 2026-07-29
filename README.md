@@ -4,12 +4,12 @@ English | [中文](README.zh.md)
 
 `mt` is Plaud's multi-repository development tool. **Since v2.0 it supports two kinds of workspaces** with zero configuration, out of the box:
 
-> 🚀 **New to the project?** Once mt is installed, the first command you run is always [`mt init`](#initialize-the-dev-environment-first-step-for-newcomers) — it sets up the Flutter engine and pulls all the code for you.
+> 🚀 **New to the project?** Once mt is installed, the first command you run is always [`mt init`](#initialize-the-dev-environment-first-step-for-newcomers) — it pulls all the code for you. By default it sets up the **Native 4.0** workspace (no Flutter needed).
 
 | Workspace type | Detected via marker | Repos | Applies to |
 |---|---|---|---|
-| **flutter-mt** | `plaud-android/` | 7 | Plaud-App (Flutter + Native hybrid project) |
-| **native-app2** | `plaud-native-android/` | 5 | Plaud-Native-App2 (pure Native project: Android / iOS / HarmonyOS) |
+| **native-app2** (4.0, default) | `plaud-native-android/` | 5 | Plaud-Native-App2 (pure Native project: Android / iOS / HarmonyOS) |
+| **flutter-mt** (3.0, legacy) | `plaud-android/` | 7 | Plaud-App (Flutter + Native hybrid project) — see [doc/CLONE_V3.md](doc/CLONE_V3.md) *(Chinese only)* |
 
 mt automatically detects the workspace type based on your current directory — command names and arguments are identical, so there's no need to switch tools.
 
@@ -39,43 +39,45 @@ source ~/.bashrc
 
 ## Initialize the dev environment (first step for newcomers)
 
-> **This is the first command a new hire should run.** Once mt is installed, you don't need to install Flutter by hand or manually clone repositories — one `mt init` does it all.
+> **This is the first command a new hire should run.** Once mt is installed, you don't need to manually clone repositories — one `mt init` does it all.
 
-Run this the first time you set up a workspace:
+By default `mt init` sets up the **Native 4.0** workspace (`Plaud-Native-App`) — no Flutter environment required:
 
 ```bash
 cd /path/to/your/workspace
 mt init
 ```
 
+`mt init` will ask which version to set up (default: **Native 4.0**, press Enter to accept). If no terminal is attached (e.g. run from a script), it silently defaults to 4.0 as well. You can also skip the prompt with an explicit flag:
+
+```bash
+mt init --v4   # Native 4.0 (default) — same as mt clone --v4, no Flutter setup
+mt init --v3   # Flutter 3.0 (legacy) — installs Homebrew/FVM/Flutter, then clones Plaud-App
+```
+
 To use a custom directory name:
 
 ```bash
-mt init My-Plaud-App
+mt init My-Plaud-Native-App
 ```
-
-`mt init` sets up the project environment. It runs through, in order:
-- Detecting Homebrew
-- Detecting and installing FVM
-- Installing and configuring Flutter `3.38.9`
-- Writing to your shell environment and creating `fvm` / `flutter` / `dart` command entries
-- Running `mt clone` to pull the Plaud-App code
 
 After initialization, it's a good idea to check your environment once:
 
 ```bash
-cd Plaud-App
+cd Plaud-Native-App
 mt doctor
 ```
 
 If you passed a custom directory name, `cd` into that directory instead.
+
+Still on the Flutter + Native hybrid project (3.0)? See [doc/CLONE_V3.md](doc/CLONE_V3.md) *(Chinese only)* for the full `--v3` setup flow.
 
 ## Recommended for beginners
 
 After entering the project for the first time, we recommend running:
 
 ```bash
-cd Plaud-App
+cd Plaud-Native-App
 mt go
 ```
 
@@ -84,7 +86,9 @@ mt go
 ## Common commands
 
 - `mt init`
-  Set up the project environment, pull the code, and configure the Flutter engine.
+  Set up the project and pull the code. Native 4.0 by default (no Flutter); `--v3` also configures the Flutter engine for the legacy hybrid project.
+- `mt clone`
+  Only clone the repositories (skip the environment bootstrap). Same `--v3`/`--v4` selection as `mt init`.
 - `mt go`
   Recommended for beginners. Runs `prebuild + install` for Android `global debug` by default.
 - `mt install`
@@ -105,7 +109,7 @@ Common global options include `--current`, `--json`, `--dry-run`, `--fail-fast`.
 
 ## Using it in the Plaud-Native-App2 project
 
-Once inside the workspace, the commands are identical to Plaud-App:
+This is the default workspace `mt init` sets up (see above). Once inside the workspace, the commands are identical to Plaud-App:
 
 ```bash
 cd /path/to/plaud-native-app2
@@ -130,3 +134,4 @@ Repository list (switches automatically by workspace, no configuration needed):
 
 - [Usage guide](doc/README.md) *(Chinese only)*
 - [Technical design](doc/TECHNICAL_DESIGN.md) *(Chinese only)*
+- [Flutter 3.0 (legacy) setup guide](doc/CLONE_V3.md) *(Chinese only)*

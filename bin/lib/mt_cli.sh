@@ -7,7 +7,20 @@ handle_doctor_command() {
 }
 
 handle_init_command() {
-    bootstrap_environment_and_clone "${1:-$PLAUD_APP_DEFAULT_DIR}"
+    local version_flag="" dir_arg=""
+    if ! parse_clone_init_args version_flag dir_arg "$@"; then
+        return 1
+    fi
+
+    local version=""
+    version=$(resolve_clone_version "$version_flag")
+
+    if [[ "$version" == "v3" ]]; then
+        bootstrap_environment_and_clone "${dir_arg:-$PLAUD_APP_DEFAULT_DIR}"
+        return $?
+    fi
+
+    clone_native_app2 "${dir_arg:-$NATIVE_APP_DEFAULT_DIR}"
 }
 
 handle_config_command() {
@@ -20,7 +33,32 @@ handle_config_command() {
 }
 
 handle_clone_command() {
-    clone_plaud_app "${1:-$PLAUD_APP_DEFAULT_DIR}"
+    local version_flag="" dir_arg=""
+    if ! parse_clone_init_args version_flag dir_arg "$@"; then
+        return 1
+    fi
+
+    local version=""
+    version=$(resolve_clone_version "$version_flag")
+
+    if [[ "$version" == "v3" ]]; then
+        if [[ "$version_flag" != "v3" ]]; then
+            echo ""
+            echo_bi "$YELLOW" "Flutter 3.0 also requires setting up the Flutter environment." "3.0 还需要额外配置 Flutter 环境。"
+            echo_bi "$CYAN" "We recommend running \`mt init --v3\` instead, which sets up the environment and clones for you." "建议直接运行 \`mt init --v3\`，会自动完成环境配置和代码克隆。"
+            echo -e "${YELLOW}Continue with clone only? / 仍然只执行 clone？(y/N)${NC}"
+            local response=""
+            read -r response
+            if [[ ! "$response" =~ ^[Yy]$ ]]; then
+                echo_bi "$YELLOW" "已取消" "Cancelled"
+                return 0
+            fi
+        fi
+        clone_plaud_app "${dir_arg:-$PLAUD_APP_DEFAULT_DIR}"
+        return $?
+    fi
+
+    clone_native_app2 "${dir_arg:-$NATIVE_APP_DEFAULT_DIR}"
 }
 
 handle_set_github_token_command() {

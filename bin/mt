@@ -92,7 +92,7 @@ CHECK_MARK="✓"
 CROSS_MARK="✗"
 ARROW="→"
 
-VERSION="2.1.0"
+VERSION="2.2.0"
 
 GITHUB_REPO="sanatozhang/mt"
 GITHUB_BRANCH="main"
@@ -129,6 +129,8 @@ FVM_BREW_TAP="leoafarias/fvm"
 FVM_FLUTTER_VERSION="3.38.9"
 PLAUD_APP_REPO_URL="git@github.com:Plaud-AI/Plaud-App.git"
 PLAUD_APP_DEFAULT_DIR="Plaud-App"
+NATIVE_APP_REPO_URL="git@github.com:Plaud-AI/plaud-native-app.git"
+NATIVE_APP_DEFAULT_DIR="Plaud-Native-App"
 
 SUPPORTED_GIT_COMMANDS=(
     "add" "am" "apply" "archive" "bisect" "blame" "branch" "bundle" "checkout"
@@ -184,9 +186,9 @@ GIT_ALIAS_DEFINITIONS=(
 REGISTERED_COMMANDS=(
     "list|handle_list_command|tool|列出固定支持的仓库 / List built-in repositories"
     "doctor|handle_doctor_command|tool|检查开发环境、工作区和仓库状态 / Check toolchain, workspace and repository status"
-    "init|handle_init_command|tool|创建项目环境，配置 Flutter 并克隆 Plaud-App / Set up the project, configure Flutter and clone Plaud-App"
+    "init|handle_init_command|tool|创建项目环境并克隆代码（默认 Native 4.0；--v3 走 Flutter 3.0 完整环境配置）/ Set up the project and clone the code (Native 4.0 by default; --v3 for the full Flutter 3.0 environment setup)"
     "config|handle_config_command|tool|兼容入口：当前版本无需 .mt-config.yaml / Compat entry: this version no longer needs .mt-config.yaml"
-    "clone|handle_clone_command|tool|克隆 Plaud-App 仓库并初始化子模块 / Clone the Plaud-App repo and init submodules"
+    "clone|handle_clone_command|tool|克隆仓库并初始化子模块（默认 Native 4.0，--v3 走 Flutter 3.0）/ Clone the repo and init submodules (Native 4.0 by default, --v3 for Flutter 3.0)"
     "set-github-token|handle_set_github_token_command|tool|设置 GitHub token / Set the GitHub token"
     "delete|handle_delete_command|tool|删除本地分支 / Delete local branches"
     "sync|handle_sync_command|tool|同步上游：fetch + rebase origin/<base>（可选 --push）/ Sync upstream: fetch + rebase origin/<base> (optional --push)"

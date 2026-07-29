@@ -1077,6 +1077,188 @@ clone_plaud_app() {
     return 0
 }
 
+clone_native_app2() {
+    local target_dir="${1:-$NATIVE_APP_DEFAULT_DIR}"
+
+    echo -e "${BLUE}========================================${NC}"
+    echo_bi "$BLUE" "  开始克隆 Plaud-Native-App 仓库" "  Cloning the Plaud-Native-App repository"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    echo_bi "$CYAN" "仓库地址: ${NATIVE_APP_REPO_URL}" "Repository: ${NATIVE_APP_REPO_URL}"
+    echo_bi "$CYAN" "目标目录: ${target_dir}" "Target directory: ${target_dir}"
+    echo ""
+
+    if [[ -d "$target_dir" ]]; then
+        echo_bi "$BOLD_YELLOW" "警告: 目录 ${target_dir} 已存在" "Warning: directory ${target_dir} already exists"
+        echo -e "${YELLOW}是否要继续 / Continue? (y/N)${NC}"
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            echo_bi "$YELLOW" "已取消" "Cancelled"
+            return 0
+        fi
+    fi
+
+    echo_bi "$BLUE" "[1/3] 克隆主仓库..." "[1/3] Cloning the main repository..."
+    print_command "$(pwd)" git clone "$NATIVE_APP_REPO_URL" "$target_dir"
+
+    if ! git clone "$NATIVE_APP_REPO_URL" "$target_dir" 2>&1; then
+        echo -e "${BOLD_RED}${CROSS_MARK} 克隆失败 / Clone failed${NC}"
+        return 1
+    fi
+
+    echo ""
+    echo -e "${GREEN}${CHECK_MARK} 主仓库克隆成功 / Main repository cloned successfully${NC}"
+    echo ""
+
+    echo_bi "$BLUE" "[2/3] 初始化子模块..." "[2/3] Initializing submodules..."
+    echo -e "${CYAN}执行 / Running: git submodule update --init --recursive${NC}"
+    echo ""
+
+    local submodule_output=""
+    if ! submodule_output=$(cd "$target_dir" && git submodule update --init --recursive 2>&1); then
+        echo -e "${BOLD_RED}${CROSS_MARK} 子模块初始化失败 / Submodule initialization failed${NC}"
+        echo_bi "$YELLOW" "输出:" "Output:"
+        echo "$submodule_output" | sed 's/^/  /'
+        echo ""
+        echo_bi "$BOLD_YELLOW" "警告: 主仓库已克隆成功，但子模块初始化失败" "Warning: the main repository was cloned, but submodule initialization failed"
+        echo -e "${YELLOW}你可以稍后手动执行 / You can run this manually later: cd ${target_dir} && git submodule update --init --recursive${NC}"
+        return 1
+    fi
+
+    if [[ -n "$submodule_output" ]]; then
+        echo "$submodule_output" | sed 's/^/  /'
+    fi
+
+    echo ""
+    echo -e "${GREEN}${CHECK_MARK} 子模块初始化成功 / Submodules initialized successfully${NC}"
+    echo ""
+
+    echo_bi "$BLUE" "[3/3] 克隆嵌套子仓库..." "[3/3] Cloning nested sub-repositories..."
+    local repo_info=""
+    for repo_info in "${NATIVE_APP2_REPOSITORIES[@]}"; do
+        IFS='|' read -r name path url <<< "$repo_info"
+        if [[ "$path" != */* ]]; then
+            # 顶层仓库已经通过 submodule update 拉取
+            continue
+        fi
+
+        local sub_path="${target_dir}/${path}"
+        local parent_dir=""
+        parent_dir="$(dirname "$sub_path")"
+        local sub_name=""
+        sub_name="$(basename "$sub_path")"
+
+        if [[ ! -d "$parent_dir" ]]; then
+            echo_bi "$BOLD_YELLOW" "警告: ${parent_dir} 目录不存在，跳过 ${name} 克隆" "Warning: ${parent_dir} not found, skipping ${name} clone"
+        elif [[ -d "$sub_path" ]]; then
+            echo -e "${YELLOW}  ⏭  跳过: ${name} 目录已存在 / Skipped: ${name} directory already exists${NC}"
+        else
+            echo -e "${CYAN}执行 / Running: git clone ${url} ${sub_path}${NC}"
+            echo ""
+
+            if ! (cd "$parent_dir" && git clone "$url" "$sub_name" 2>&1); then
+                echo_bi "$BOLD_YELLOW" "警告: ${name} 克隆失败" "Warning: ${name} clone failed"
+                echo -e "${YELLOW}你可以稍后手动执行 / You can run this manually later: cd ${parent_dir} && git clone ${url} ${sub_name}${NC}"
+            else
+                echo ""
+                echo -e "${GREEN}${CHECK_MARK} ${name} 克隆成功 / ${name} cloned successfully${NC}"
+            fi
+        fi
+    done
+
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${GREEN}${CHECK_MARK} Plaud-Native-App 仓库克隆完成 / Plaud-Native-App repository clone complete${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    echo_bi "$CYAN" "下一步:" "Next steps:"
+    echo -e "${CYAN}  cd ${target_dir}${NC}"
+    echo -e "${CYAN}  mt list${NC}"
+
+    return 0
+}
+
+# 解析版本选择的交互提示（本次新增，按要求英文在前、中文在后）
+# 参数: version_flag（"" | "v3" | "v4"，来自 --v3/--v4 显式传参）
+# 输出: "v3" 或 "v4"（stdout）；提示文案本身写到 stderr，避免污染返回值
+resolve_clone_version() {
+    local version_flag="$1"
+
+    if [[ "$version_flag" == "v3" ]] || [[ "$version_flag" == "v4" ]]; then
+        echo "$version_flag"
+        return 0
+    fi
+
+    if [[ ! -t 0 ]]; then
+        # 非交互场景（脚本/CI），静默走默认 4.0
+        echo "v4"
+        return 0
+    fi
+
+    echo "Select which version to clone:" >&2
+    echo "请选择要 clone 的版本：" >&2
+    echo "  1) Native 4.0  (default / 默认)" >&2
+    echo "  2) Flutter 3.0" >&2
+    echo -n "Enter your choice [1]: " >&2
+
+    local choice=""
+    read -r choice
+
+    if [[ "$choice" == "2" ]]; then
+        echo "v3"
+    else
+        echo "v4"
+    fi
+}
+
+# 解析 mt clone / mt init 的参数：[目录名] [--v3|--v4]
+# 用法: parse_clone_init_args version_var dir_var "$@"
+parse_clone_init_args() {
+    local __version_var="$1"
+    local __dir_var="$2"
+    shift 2
+
+    local __parsed_version=""
+    local __parsed_dir=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --v3)
+                if [[ -n "$__parsed_version" ]] && [[ "$__parsed_version" != "v3" ]]; then
+                    echo_bi "$BOLD_RED" "错误: --v3 和 --v4 不能同时使用" "Error: --v3 and --v4 cannot be used together"
+                    return 1
+                fi
+                __parsed_version="v3"
+                shift
+                ;;
+            --v4)
+                if [[ -n "$__parsed_version" ]] && [[ "$__parsed_version" != "v4" ]]; then
+                    echo_bi "$BOLD_RED" "错误: --v3 和 --v4 不能同时使用" "Error: --v3 and --v4 cannot be used together"
+                    return 1
+                fi
+                __parsed_version="v4"
+                shift
+                ;;
+            -*)
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
+                return 1
+                ;;
+            *)
+                if [[ -n "$__parsed_dir" ]]; then
+                    echo_bi "$BOLD_RED" "错误: 只能指定一个目录名: $1" "Error: only one directory name can be specified: $1"
+                    return 1
+                fi
+                __parsed_dir="$1"
+                shift
+                ;;
+        esac
+    done
+
+    printf -v "$__version_var" '%s' "$__parsed_version"
+    printf -v "$__dir_var" '%s' "$__parsed_dir"
+    return 0
+}
+
 bootstrap_environment_and_clone() {
     local target_dir="${1:-$PLAUD_APP_DEFAULT_DIR}"
 

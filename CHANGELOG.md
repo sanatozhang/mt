@@ -7,6 +7,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.2.0] - 2026-07-29
+
+### 新增
+
+#### 支持 Plaud-App 4.0（Native mono-repo），并设为默认
+- 新增 `clone_native_app2()`（`bin/lib/mt_repo.sh`）：clone 4.0 主仓 `plaud-native-app.git` + `git submodule update --init --recursive` + 单独 clone `nicebuildSDK`、`PenSubmodules` 两个嵌套子仓库（路径/地址复用既有的 `NATIVE_APP2_REPOSITORIES`）
+- `mt clone` / `mt init` 新增 `--v3` / `--v4` 参数，用于显式选择要 clone 的版本；不传参数时交互询问（默认 **Native 4.0**，直接回车即可采用），未连接终端的场景（脚本/CI）静默按 4.0 处理，不阻塞
+- **4.0（默认）**：`mt init` 跳过 Homebrew/FVM/Flutter 环境搭建，等价于直接执行 `mt clone --v4`
+- **3.0（`--v3`，历史 Flutter + Native 混合项目）**：`mt init --v3` 行为不变（Homebrew → FVM → Flutter `3.38.9` → clone `Plaud-App`）；`mt clone` 在交互中选到 3.0 时会提示"建议改用 `mt init --v3`"，需二次确认后才继续仅 clone
+- README（中/英）默认展示 4.0 流程；3.0 的完整搭建说明移至新增文档 [doc/CLONE_V3.md](doc/CLONE_V3.md)
+
+### 变更（默认行为调整）
+
+- `mt init` / `mt clone` 不带参数时的默认行为从 3.0（`Plaud-App`）变为 4.0（`Plaud-Native-App`）。仍在维护 3.0 项目的同学请显式加 `--v3`，完整说明见 `doc/CLONE_V3.md`
+
 ## [2.1.0] - 2026-07-29
 
 ### 新增
