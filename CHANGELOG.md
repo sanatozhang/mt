@@ -15,7 +15,7 @@
 - `bin/` 下所有用户可见输出（提示、错误、帮助文本、安装向导）全面支持中英双语，一条提示中文在前、英文在后
 - 新增 `echo_bi` / `echo_bi_err`（`bin/lib/mt_core.sh`）双语输出助手，`bin/install-mt.sh` 因是独立分发脚本自带一份同名实现
 - `mt help` 完整帮助文本双语化，`mt init` 在帮助文本与 README 中标注为新人入职后应执行的第一条命令
-- `README.md` / `CHANGELOG.md` 新增语言切换链接，并新增 `README.en.md` / `CHANGELOG.en.md` 完整英文版
+- `README.md` / `CHANGELOG.md` 新增语言切换链接；`README.md` 默认展示英文版，中文版移至 `README.zh.md`；新增 `CHANGELOG.en.md` 完整英文版
 
 ### 不变（向后兼容）
 

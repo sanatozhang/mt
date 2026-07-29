@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Every user-visible output under `bin/` (prompts, errors, help text, install wizard) now supports bilingual output — Chinese first, English on the line below
 - Added `echo_bi` / `echo_bi_err` bilingual output helpers (`bin/lib/mt_core.sh`); `bin/install-mt.sh` carries its own copy since it's a standalone distribution script
 - The full `mt help` text is now bilingual; `mt init` is flagged in both the help text and the README as the first command new hires should run
-- Added language-switch links to `README.md` / `CHANGELOG.md`, plus full English translations `README.en.md` / `CHANGELOG.en.md`
+- Added language-switch links to `README.md` / `CHANGELOG.md`; `README.md` now defaults to English, with the Chinese version moved to `README.zh.md`; added a full English translation `CHANGELOG.en.md`
 
 ### Unchanged (backward compatible)
 

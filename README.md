@@ -1,27 +1,27 @@
 # MT
 
-中文 | [English](README.en.md)
+English | [中文](README.zh.md)
 
-`mt` 是 Plaud 的多仓库开发工具，**自 v2.0 起同时支持两类工作区**，零配置开箱即用：
+`mt` is Plaud's multi-repository development tool. **Since v2.0 it supports two kinds of workspaces** with zero configuration, out of the box:
 
-> 🚀 **新同事第一次接触项目？** 安装完 mt 后，第一条命令永远是 [`mt init`](#初始化开发环境新人第一步) —— 它会帮你配置好 Flutter 引擎并拉取所有代码。
+> 🚀 **New to the project?** Once mt is installed, the first command you run is always [`mt init`](#initialize-the-dev-environment-first-step-for-newcomers) — it sets up the Flutter engine and pulls all the code for you.
 
-| 工作区类型 | 识别 marker | 仓库数 | 适用项目 |
+| Workspace type | Detected via marker | Repos | Applies to |
 |---|---|---|---|
-| **flutter-mt** | `plaud-android/` | 7 个 | Plaud-App（Flutter + Native 混合工程） |
-| **native-app2** | `plaud-native-android/` | 5 个 | Plaud-Native-App2（纯 Native 工程：Android / iOS / 鸿蒙） |
+| **flutter-mt** | `plaud-android/` | 7 | Plaud-App (Flutter + Native hybrid project) |
+| **native-app2** | `plaud-native-android/` | 5 | Plaud-Native-App2 (pure Native project: Android / iOS / HarmonyOS) |
 
-mt 会根据当前所在目录自动识别工作区类型，命令名与参数完全一致，无需切换工具。
+mt automatically detects the workspace type based on your current directory — command names and arguments are identical, so there's no need to switch tools.
 
-## 安装
+## Installation
 
-推荐直接一键安装：
+One-line install is recommended:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sanatozhang/mt/main/bin/install-mt.sh)"
 ```
 
-如果一键安装失败，或者 `curl` 无法访问 GitHub Raw，就直接回退到手动安装：
+If the one-line install fails, or `curl` can't reach GitHub Raw, fall back to a manual install:
 
 ```bash
 git clone https://github.com/sanatozhang/mt.git
@@ -29,104 +29,104 @@ cd mt
 ./bin/install-mt.sh
 ```
 
-安装完成后，重新打开终端，或者执行：
+After installing, reopen your terminal, or run:
 
 ```bash
 source ~/.zshrc
-# 或
+# or
 source ~/.bashrc
 ```
 
-## 初始化开发环境（新人第一步）
+## Initialize the dev environment (first step for newcomers)
 
-> **这是新人入职后要执行的第一条命令。** 装好 mt 之后，不需要手动装 Flutter、不需要手动 clone 仓库 —— 一条 `mt init` 全部搞定。
+> **This is the first command a new hire should run.** Once mt is installed, you don't need to install Flutter by hand or manually clone repositories — one `mt init` does it all.
 
-首次拉起工作区时执行：
+Run this the first time you set up a workspace:
 
 ```bash
 cd /path/to/your/workspace
 mt init
 ```
 
-如果要指定目录名：
+To use a custom directory name:
 
 ```bash
 mt init My-Plaud-App
 ```
 
-`mt init` 用来创建项目环境。它会依次完成：
-- 检测 Homebrew
-- 检测并安装 FVM
-- 安装并配置 Flutter `3.38.9`
-- 写入 shell 环境，并创建 `fvm` / `flutter` / `dart` 命令入口
-- 执行 `mt clone` 拉取 Plaud-App 代码
+`mt init` sets up the project environment. It runs through, in order:
+- Detecting Homebrew
+- Detecting and installing FVM
+- Installing and configuring Flutter `3.38.9`
+- Writing to your shell environment and creating `fvm` / `flutter` / `dart` command entries
+- Running `mt clone` to pull the Plaud-App code
 
-初始化完成后建议先检查一次环境：
+After initialization, it's a good idea to check your environment once:
 
 ```bash
 cd Plaud-App
 mt doctor
 ```
 
-如果你传了自定义目录名，进入对应目录即可。
+If you passed a custom directory name, `cd` into that directory instead.
 
-## 新手推荐
+## Recommended for beginners
 
-第一次进入项目后，推荐直接执行：
+After entering the project for the first time, we recommend running:
 
 ```bash
 cd Plaud-App
 mt go
 ```
 
-`mt go` 是新手最常用的入口，默认会执行 Android `global debug` 的 `prebuild + install`。
+`mt go` is the most common entry point for newcomers — by default it runs `prebuild + install` for Android `global debug`.
 
-## 常用命令
+## Common commands
 
 - `mt init`
-  创建项目环境，拉取代码，配置 Flutter 引擎。
+  Set up the project environment, pull the code, and configure the Flutter engine.
 - `mt go`
-  新手推荐命令。默认执行 Android `global debug` 的 `prebuild + install`。
+  Recommended for beginners. Runs `prebuild + install` for Android `global debug` by default.
 - `mt install`
-  执行 Android 打包并安装到设备。
+  Build the Android package and install it on a device.
 - `mt install:ios`
-  执行 iOS 打包并安装到设备。
+  Build the iOS package and install it on a device.
 - `mt prebuild`
-  - **flutter-mt**：调用工作区 `build_all.sh`，包括 `flutter pub get`、多语言脚本等
-  - **native-app2**：依次跑 `plaud-native-android/build.sh`（翻译/埋点）与 `plaud-native-ios/scripts/start/build.sh`（pod install）
+  - **flutter-mt**: calls the workspace's `build_all.sh`, which includes `flutter pub get`, i18n scripts, etc.
+  - **native-app2**: runs `plaud-native-android/build.sh` (translation/analytics) then `plaud-native-ios/scripts/start/build.sh` (pod install)
 - `mt build`
-  只构建，不安装。
+  Build only, don't install.
 - `mt pr`
-  为多仓库创建 PR。
+  Create PRs across repositories.
 - `mt upgrade`
-  更新 mt 工具。
+  Upgrade the mt tool.
 
-常用全局选项有 `--current`、`--json`、`--dry-run`、`--fail-fast`。完整参数说明见详细文档。
+Common global options include `--current`, `--json`, `--dry-run`, `--fail-fast`. See the detailed documentation for the full option reference.
 
-## 在 Plaud-Native-App2 项目下使用
+## Using it in the Plaud-Native-App2 project
 
-进入工作区后，命令与 Plaud-App 完全一致：
+Once inside the workspace, the commands are identical to Plaud-App:
 
 ```bash
 cd /path/to/plaud-native-app2
 
-mt status                        # 5 个仓库的状态
-mt build global -d               # 构建 Android Global Debug APK
-mt build cn -r -c huawei         # 构建 Android CN Huawei Release APK
-mt build:ios global -d           # 构建 iOS Plaud-Global.app
-mt install global -d             # 构建 + adb install
-mt prebuild                      # 跑 native-android / native-ios 的 setup 脚本
-mt go global -d                  # prebuild + install 一条龙
-mt clean -a                      # 只清 Android 缓存
+mt status                        # status of 5 repositories
+mt build global -d               # build the Android Global Debug APK
+mt build cn -r -c huawei         # build the Android CN Huawei Release APK
+mt build:ios global -d           # build the iOS Plaud-Global.app
+mt install global -d             # build + adb install
+mt prebuild                      # run the native-android / native-ios setup scripts
+mt go global -d                  # prebuild + install in one go
+mt clean -a                      # clear the Android cache only
 ```
 
-仓库列表（自动按工作区切换，无需配置）：
+Repository list (switches automatically by workspace, no configuration needed):
 - `plaud-native-android` / `plaud-native-ios` / `plaud-native-harmony`
-- 嵌套子模块：`nicebuildSDK`、`PenSubmodules`
+- Nested submodules: `nicebuildSDK`, `PenSubmodules`
 
-> 不在两类工作区目录下执行打包命令时，mt 会给出友好提示并列出已支持的工作区。
+> When a build command is run outside either supported workspace, mt shows a friendly message listing the supported workspaces.
 
-## 详细文档
+## Detailed documentation
 
-- [使用文档](doc/README.md)
-- [技术方案](doc/TECHNICAL_DESIGN.md)
+- [Usage guide](doc/README.md) *(Chinese only)*
+- [Technical design](doc/TECHNICAL_DESIGN.md) *(Chinese only)*
