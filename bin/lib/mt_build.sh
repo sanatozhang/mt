@@ -8,13 +8,13 @@ _build_android_internal() {
 
     # 验证市场参数
     if [[ "$market" != "cn" ]] && [[ "$market" != "global" ]]; then
-        echo -e "${BOLD_RED}错误: 市场参数必须是 cn 或 global${NC}"
+        echo_bi "$BOLD_RED" "错误: 市场参数必须是 cn 或 global" "Error: the market argument must be cn or global"
         return 1
     fi
 
     # 验证构建类型
     if [[ "$build_type" != "debug" ]] && [[ "$build_type" != "release" ]] && [[ "$build_type" != "profile" ]]; then
-        echo -e "${BOLD_RED}错误: 构建类型必须是 debug、release 或 profile${NC}"
+        echo_bi "$BOLD_RED" "错误: 构建类型必须是 debug、release 或 profile" "Error: the build type must be debug, release or profile"
         return 1
     fi
 
@@ -30,8 +30,8 @@ _build_android_internal() {
                 fi
             done
             if [[ "$valid" == false ]]; then
-                echo -e "${BOLD_RED}错误: 无效的渠道 '$channel'${NC}"
-                echo -e "${YELLOW}支持的渠道: ${valid_channels[*]}${NC}"
+                echo_bi "$BOLD_RED" "错误: 无效的渠道 '$channel'" "Error: invalid channel '$channel'"
+                echo_bi "$YELLOW" "支持的渠道: ${valid_channels[*]}" "Supported channels: ${valid_channels[*]}"
                 return 1
             fi
         fi
@@ -39,7 +39,7 @@ _build_android_internal() {
 
     # Global 版本不支持渠道
     if [[ "$market" == "global" ]] && ([[ -n "$channel" ]] || [[ "$build_all_channels" == "true" ]]); then
-        echo -e "${BOLD_YELLOW}警告: Global 版本不支持渠道参数，已忽略${NC}"
+        echo_bi "$BOLD_YELLOW" "警告: Global 版本不支持渠道参数，已忽略" "Warning: the Global build does not support a channel; ignored"
         channel=""
         build_all_channels="false"
     fi
@@ -47,44 +47,44 @@ _build_android_internal() {
     # 执行构建
     local android_dir="${PROJECT_ROOT}/plaud-android"
     if [[ ! -d "$android_dir" ]]; then
-        echo -e "${BOLD_RED}错误: Android 项目目录不存在: $android_dir${NC}"
+        echo_bi "$BOLD_RED" "错误: Android 项目目录不存在: $android_dir" "Error: Android project directory not found: $android_dir"
         return 1
     fi
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  开始构建 Android 包${NC}"
+    echo_bi "$BLUE" "  开始构建 Android 包" "  Building Android package"
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${CYAN}市场: ${market}${NC}"
-    echo -e "${CYAN}构建类型: ${build_type}${NC}"
+    echo_bi "$CYAN" "市场: ${market}" "Market: ${market}"
+    echo_bi "$CYAN" "构建类型: ${build_type}" "Build type: ${build_type}"
     if [[ "$market" == "cn" ]]; then
         if [[ "$build_all_channels" == "true" ]]; then
-            echo -e "${CYAN}渠道: 所有渠道${NC}"
+            echo_bi "$CYAN" "渠道: 所有渠道" "Channel: all channels"
         elif [[ -n "$channel" ]]; then
-            echo -e "${CYAN}渠道: ${channel}${NC}"
+            echo_bi "$CYAN" "渠道: ${channel}" "Channel: ${channel}"
         else
-            echo -e "${CYAN}渠道: official (默认)${NC}"
+            echo_bi "$CYAN" "渠道: official (默认)" "Channel: official (default)"
         fi
     fi
     echo ""
 
     # 切换 flavor
-    echo -e "${BLUE}[1/3] 切换 Flavor...${NC}"
+    echo_bi "$BLUE" "[1/3] 切换 Flavor..." "[1/3] Switching flavor..."
     local switch_script="${android_dir}/switch_flavor.sh"
     if [[ ! -f "$switch_script" ]]; then
-        echo -e "${BOLD_RED}错误: switch_flavor.sh 不存在${NC}"
+        echo_bi "$BOLD_RED" "错误: switch_flavor.sh 不存在" "Error: switch_flavor.sh not found"
         return 1
     fi
 
     print_command "$android_dir" bash "$switch_script" "$market"
 
     (cd "$android_dir" && bash "$switch_script" "$market" 2>&1) || {
-        echo -e "${BOLD_RED}错误: 切换 Flavor 失败${NC}"
+        echo_bi "$BOLD_RED" "错误: 切换 Flavor 失败" "Error: switching flavor failed"
         return 1
     }
-    echo -e "${GREEN}${CHECK_MARK} Flavor 已切换为 ${market}${NC}"
+    echo -e "${GREEN}${CHECK_MARK} Flavor 已切换为 ${market} / Flavor switched to ${market}${NC}"
     echo ""
 
-    echo -e "${BLUE}[2/3] 执行 Gradle 构建...${NC}"
+    echo_bi "$BLUE" "[2/3] 执行 Gradle 构建..." "[2/3] Running Gradle build..."
     local gradle_task=""
 
     if [[ "$market" == "cn" ]]; then
@@ -92,7 +92,7 @@ _build_android_internal() {
             if [[ "$build_type" == "release" ]]; then
                 gradle_task="assembleCnAllRelease"
             else
-                echo -e "${BOLD_RED}错误: --all 选项目前只支持 release 构建${NC}"
+                echo_bi "$BOLD_RED" "错误: --all 选项目前只支持 release 构建" "Error: --all currently only supports release builds"
                 return 1
             fi
         elif [[ -n "$channel" ]]; then
@@ -109,29 +109,29 @@ _build_android_internal() {
     fi
 
     if [[ "$skip_clean" == "true" ]]; then
-        echo -e "${CYAN}执行任务: ./gradlew ${gradle_task}${NC}"
+        echo -e "${CYAN}执行任务 / Running task: ./gradlew ${gradle_task}${NC}"
         print_command "$android_dir" ./gradlew "$gradle_task" --stacktrace
         (cd "$android_dir" && ./gradlew "$gradle_task" --stacktrace 2>&1) || {
-            echo -e "${BOLD_RED}${CROSS_MARK} Gradle 构建失败${NC}"
+            echo -e "${BOLD_RED}${CROSS_MARK} Gradle 构建失败 / Gradle build failed${NC}"
             return 1
         }
     else
-        echo -e "${CYAN}执行任务: ./gradlew clean ${gradle_task}${NC}"
+        echo -e "${CYAN}执行任务 / Running task: ./gradlew clean ${gradle_task}${NC}"
         print_command "$android_dir" ./gradlew clean "$gradle_task" --stacktrace
         (cd "$android_dir" && ./gradlew clean "$gradle_task" --stacktrace 2>&1) || {
-            echo -e "${BOLD_RED}${CROSS_MARK} Gradle 构建失败${NC}"
+            echo -e "${BOLD_RED}${CROSS_MARK} Gradle 构建失败 / Gradle build failed${NC}"
             return 1
         }
     fi
     echo ""
 
-    echo -e "${BLUE}[3/3] 构建完成${NC}"
+    echo_bi "$BLUE" "[3/3] 构建完成" "[3/3] Build complete"
     echo ""
-    echo -e "${BOLD_GREEN}${CHECK_MARK} 构建成功！${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} 构建成功！/ Build succeeded!${NC}"
 
     local apk_dir="${android_dir}/app/build/outputs/apk"
     if [[ -d "$apk_dir" ]]; then
-        echo -e "${BLUE}APK 文件位置:${NC}"
+        echo_bi "$BLUE" "APK 文件位置:" "APK file location:"
         find "$apk_dir" -name "*.apk" -type f | while read -r apk; do
             local apk_size
             apk_size=$(du -h "$apk" | cut -f1)
@@ -169,7 +169,7 @@ build_android() {
                 ;;
             -c|--c|--channel)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --channel 需要指定渠道名称${NC}"
+                    echo_bi "$BOLD_RED" "错误: --channel 需要指定渠道名称" "Error: --channel requires a channel name"
                     return 1
                 fi
                 channel="$2"
@@ -180,7 +180,7 @@ build_android() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
                 return 1
                 ;;
         esac
@@ -207,24 +207,24 @@ _install_android_internal() {
     local build_exit_code=$?
 
     if [[ $build_exit_code -ne 0 ]]; then
-        echo -e "${BOLD_RED}构建失败，无法安装${NC}"
+        echo_bi "$BOLD_RED" "构建失败，无法安装" "Build failed, cannot install"
         return $build_exit_code
     fi
 
     if ! command -v adb &> /dev/null; then
-        echo -e "${BOLD_RED}错误: adb 命令不可用，请确保已安装 Android SDK Platform Tools${NC}"
-        echo -e "${YELLOW}安装方法: brew install android-platform-tools${NC}"
+        echo_bi "$BOLD_RED" "错误: adb 命令不可用，请确保已安装 Android SDK Platform Tools" "Error: adb command not available; make sure Android SDK Platform Tools is installed"
+        echo_bi "$YELLOW" "安装方法: brew install android-platform-tools" "Install with: brew install android-platform-tools"
         return 1
     fi
 
     local devices
     devices=$(adb devices 2>/dev/null | grep -v "List of devices" | grep "device$" | wc -l | tr -d ' ')
     if [[ "$devices" -eq 0 ]]; then
-        echo -e "${BOLD_RED}错误: 未检测到已连接的 Android 设备${NC}"
-        echo -e "${YELLOW}请确保:${NC}"
-        echo -e "${CYAN}  1. 设备已通过 USB 连接${NC}"
-        echo -e "${CYAN}  2. 已启用 USB 调试${NC}"
-        echo -e "${CYAN}  3. 已授权此计算机进行 USB 调试${NC}"
+        echo_bi "$BOLD_RED" "错误: 未检测到已连接的 Android 设备" "Error: no connected Android device detected"
+        echo_bi "$YELLOW" "请确保:" "Please make sure:"
+        echo -e "${CYAN}  1. 设备已通过 USB 连接 / The device is connected via USB${NC}"
+        echo -e "${CYAN}  2. 已启用 USB 调试 / USB debugging is enabled${NC}"
+        echo -e "${CYAN}  3. 已授权此计算机进行 USB 调试 / This computer is authorized for USB debugging${NC}"
         return 1
     fi
 
@@ -233,7 +233,7 @@ _install_android_internal() {
     local apk_files=()
 
     if [[ ! -d "$apk_dir" ]]; then
-        echo -e "${BOLD_RED}错误: APK 目录不存在: $apk_dir${NC}"
+        echo_bi "$BOLD_RED" "错误: APK 目录不存在: $apk_dir" "Error: APK directory not found: $apk_dir"
         return 1
     fi
 
@@ -280,22 +280,22 @@ _install_android_internal() {
     fi
 
     if [[ ${#apk_files[@]} -eq 0 ]]; then
-        echo -e "${BOLD_YELLOW}警告: 未找到精确匹配的 APK，尝试查找最新生成的 APK...${NC}"
+        echo_bi "$BOLD_YELLOW" "警告: 未找到精确匹配的 APK，尝试查找最新生成的 APK..." "Warning: no exact APK match found, trying the most recently built APK..."
         while IFS= read -r apk; do
             apk_files+=("$apk")
         done < <(find "$apk_dir" -name "*.apk" -type f -mmin -5 2>/dev/null | sort -r | head -5)
     fi
 
     if [[ ${#apk_files[@]} -eq 0 ]]; then
-        echo -e "${BOLD_RED}错误: 未找到对应的 APK 文件${NC}"
-        echo -e "${YELLOW}请检查构建是否成功完成${NC}"
-        echo -e "${CYAN}APK 目录: ${apk_dir}${NC}"
+        echo_bi "$BOLD_RED" "错误: 未找到对应的 APK 文件" "Error: no matching APK file found"
+        echo_bi "$YELLOW" "请检查构建是否成功完成" "Please check whether the build completed successfully"
+        echo -e "${CYAN}APK 目录 / APK directory: ${apk_dir}${NC}"
         return 1
     fi
 
     echo ""
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  开始安装到设备${NC}"
+    echo_bi "$BLUE" "  开始安装到设备" "  Installing to device"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
@@ -303,8 +303,8 @@ _install_android_internal() {
     local install_failed=0
 
     for apk_file in "${apk_files[@]}"; do
-        echo -e "${CYAN}安装: $(basename "$apk_file")${NC}"
-        echo -e "${CYAN}路径: ${apk_file}${NC}"
+        echo -e "${CYAN}安装 / Installing: $(basename "$apk_file")${NC}"
+        echo -e "${CYAN}路径 / Path: ${apk_file}${NC}"
         echo ""
 
         local install_output
@@ -314,49 +314,49 @@ _install_android_internal() {
 
         if [[ $install_exit_code -eq 0 ]]; then
             if echo "$install_output" | grep -qi "success\|Success"; then
-                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 安装成功${NC}"
+                echo -e "${BOLD_GREEN}  ${CHECK_MARK} 安装成功 / Installed successfully${NC}"
                 ((install_success++))
             else
-                echo -e "${BOLD_YELLOW}  ⚠  安装完成（可能有警告）${NC}"
+                echo -e "${BOLD_YELLOW}  ⚠  安装完成（可能有警告）/ Install completed (possible warnings)${NC}"
                 if [[ -n "$install_output" ]]; then
-                    echo -e "${YELLOW}  输出: ${install_output}${NC}"
+                    echo -e "${YELLOW}  输出 / Output: ${install_output}${NC}"
                 fi
                 ((install_success++))
             fi
         else
-            echo -e "${BOLD_RED}  ${CROSS_MARK} 安装失败${NC}"
+            echo -e "${BOLD_RED}  ${CROSS_MARK} 安装失败 / Install failed${NC}"
             echo ""
             echo -e "${BOLD_RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-            echo -e "${BOLD_RED}  错误详情:${NC}"
+            echo_bi "$BOLD_RED" "  错误详情:" "  Error details:"
             echo -e "${BOLD_RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
             if [[ -n "$install_output" ]]; then
                 echo -e "${RED}${install_output}${NC}"
             else
-                echo -e "${RED}  未获取到错误信息（退出码: ${install_exit_code}）${NC}"
+                echo -e "${RED}  未获取到错误信息（退出码: ${install_exit_code}）/ No error output captured (exit code: ${install_exit_code})${NC}"
             fi
 
             local error_hint=""
             if echo "$install_output" | grep -qi "INSTALL_FAILED_ALREADY_EXISTS\|INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then
-                error_hint="应用已安装且签名不兼容，请先卸载: adb uninstall <package_name>"
+                error_hint="应用已安装且签名不兼容，请先卸载: adb uninstall <package_name> / App is installed with an incompatible signature; uninstall first: adb uninstall <package_name>"
             elif echo "$install_output" | grep -qi "INSTALL_FAILED_INSUFFICIENT_STORAGE"; then
-                error_hint="设备存储空间不足，请清理设备存储空间"
+                error_hint="设备存储空间不足，请清理设备存储空间 / Device is low on storage; please free up space"
             elif echo "$install_output" | grep -qi "INSTALL_FAILED_INVALID_APK"; then
-                error_hint="APK 文件损坏或格式不正确，请重新构建"
+                error_hint="APK 文件损坏或格式不正确，请重新构建 / The APK is corrupted or malformed; please rebuild"
             elif echo "$install_output" | grep -qi "INSTALL_FAILED_VERSION_DOWNGRADE"; then
-                error_hint="安装的版本低于已安装版本，请先卸载或使用 -d 参数允许降级: adb install -d -r <apk>"
+                error_hint="安装的版本低于已安装版本，请先卸载或使用 -d 参数允许降级: adb install -d -r <apk> / The build version is older than the installed one; uninstall first or allow downgrade: adb install -d -r <apk>"
             elif echo "$install_output" | grep -qi "INSTALL_FAILED_PERMISSION_DENIED"; then
-                error_hint="权限被拒绝，请检查设备是否已授权 USB 调试"
+                error_hint="权限被拒绝，请检查设备是否已授权 USB 调试 / Permission denied; check whether USB debugging is authorized on the device"
             elif echo "$install_output" | grep -qi "device.*not found\|no devices/emulators found"; then
-                error_hint="设备未连接或已断开，请检查 USB 连接和 adb 连接"
+                error_hint="设备未连接或已断开，请检查 USB 连接和 adb 连接 / Device not connected or disconnected; check the USB and adb connection"
             elif echo "$install_output" | grep -qi "INSTALL_PARSE_FAILED\|INSTALL_FAILED"; then
-                error_hint="APK 解析失败，可能是构建问题或 APK 文件损坏"
+                error_hint="APK 解析失败，可能是构建问题或 APK 文件损坏 / APK parsing failed; this may be a build issue or a corrupted APK"
             fi
 
             if [[ -n "$error_hint" ]]; then
                 echo ""
                 echo -e "${BOLD_YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-                echo -e "${BOLD_YELLOW}  建议解决方案:${NC}"
+                echo_bi "$BOLD_YELLOW" "  建议解决方案:" "  Suggested fix:"
                 echo -e "${BOLD_YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
                 echo -e "${YELLOW}  ${error_hint}${NC}"
             fi
@@ -370,18 +370,18 @@ _install_android_internal() {
 
     echo -e "${BLUE}========================================${NC}"
     if [[ $install_success -gt 0 ]]; then
-        echo -e "${GREEN}${CHECK_MARK} 成功安装 ${install_success} 个 APK${NC}"
+        echo -e "${GREEN}${CHECK_MARK} 成功安装 ${install_success} 个 APK / Installed ${install_success} APK(s) successfully${NC}"
     fi
     if [[ $install_failed -gt 0 ]]; then
-        echo -e "${BOLD_RED}${CROSS_MARK} 安装失败 ${install_failed} 个 APK${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} 安装失败 ${install_failed} 个 APK / Failed to install ${install_failed} APK(s)${NC}"
         echo ""
-        echo -e "${BOLD_YELLOW}提示:${NC}"
-        echo -e "${YELLOW}  - 请检查上述错误详情和解决建议${NC}"
-        echo -e "${YELLOW}  - 如果问题持续，可以尝试:${NC}"
-        echo -e "${CYAN}    1. 检查设备连接: adb devices${NC}"
-        echo -e "${CYAN}    2. 重启 adb: adb kill-server && adb start-server${NC}"
-        echo -e "${CYAN}    3. 检查设备存储空间和权限${NC}"
-        echo -e "${CYAN}    4. 尝试手动安装: adb install -r <apk_path>${NC}"
+        echo_bi "$BOLD_YELLOW" "提示:" "Tips:"
+        echo -e "${YELLOW}  - 请检查上述错误详情和解决建议 / Check the error details and suggested fix above${NC}"
+        echo -e "${YELLOW}  - 如果问题持续，可以尝试 / If the issue persists, try:${NC}"
+        echo -e "${CYAN}    1. 检查设备连接 / Check device connection: adb devices${NC}"
+        echo -e "${CYAN}    2. 重启 adb / Restart adb: adb kill-server && adb start-server${NC}"
+        echo -e "${CYAN}    3. 检查设备存储空间和权限 / Check device storage and permissions${NC}"
+        echo -e "${CYAN}    4. 尝试手动安装 / Try installing manually: adb install -r <apk_path>${NC}"
         echo ""
         return 1
     fi
@@ -414,7 +414,7 @@ install_android() {
                 ;;
             -c|--c|--channel)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --channel 需要指定渠道名称${NC}"
+                    echo_bi "$BOLD_RED" "错误: --channel 需要指定渠道名称" "Error: --channel requires a channel name"
                     return 1
                 fi
                 channel="$2"
@@ -425,7 +425,7 @@ install_android() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
                 return 1
                 ;;
         esac
@@ -468,19 +468,19 @@ clean_cache() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
-                echo -e "${YELLOW}用法: mt clean [-a|--android] [-i|--ios] [-f|--flutter]${NC}"
-                echo -e "${CYAN}  -a, --android   只清理 Android 缓存${NC}"
-                echo -e "${CYAN}  -i, --ios       只清理 iOS 缓存${NC}"
-                echo -e "${CYAN}  -f, --flutter   只清理 Flutter 缓存${NC}"
-                echo -e "${CYAN}  无参数          清理全部（Android + iOS + Flutter）${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
+                echo_bi "$YELLOW" "用法: mt clean [-a|--android] [-i|--ios] [-f|--flutter]" "Usage: mt clean [-a|--android] [-i|--ios] [-f|--flutter]"
+                echo -e "${CYAN}  -a, --android   只清理 Android 缓存 / clean Android cache only${NC}"
+                echo -e "${CYAN}  -i, --ios       只清理 iOS 缓存 / clean iOS cache only${NC}"
+                echo -e "${CYAN}  -f, --flutter   只清理 Flutter 缓存 / clean Flutter cache only${NC}"
+                echo -e "${CYAN}  无参数          清理全部（Android + iOS + Flutter）/ no args: clean everything${NC}"
                 return 1
                 ;;
         esac
     done
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  清除缓存${NC}"
+    echo_bi "$BLUE" "  清除缓存" "  Clearing caches"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
@@ -500,7 +500,7 @@ clean_cache() {
     fi
 
     if [[ "$clean_flutter" == "true" ]]; then
-        echo -e "${CYAN}[${step_num}/${total_steps}] 清除 Flutter 缓存...${NC}"
+        echo_bi "$CYAN" "[${step_num}/${total_steps}] 清除 Flutter 缓存..." "[${step_num}/${total_steps}] Clearing Flutter cache..."
         ((step_num++))
         local flutter_dirs=(
             "${PROJECT_ROOT}/plaud-flutter-cn/.dart_tool"
@@ -519,11 +519,11 @@ clean_cache() {
 
         for dir in "${flutter_dirs[@]}"; do
             if [[ -d "$dir" ]] || [[ -f "$dir" ]]; then
-                echo -e "${CYAN}  删除: ${dir}${NC}"
+                echo -e "${CYAN}  删除 / Removing: ${dir}${NC}"
                 if rm -rf "$dir" 2>/dev/null; then
                     ((cleaned_count++))
                 else
-                    echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                    echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir} / Warning: could not remove ${dir}${NC}"
                     ((failed_count++))
                 fi
             fi
@@ -532,7 +532,7 @@ clean_cache() {
     fi
 
     if [[ "$clean_android" == "true" ]]; then
-        echo -e "${CYAN}[${step_num}/${total_steps}] 清除 Android 缓存...${NC}"
+        echo_bi "$CYAN" "[${step_num}/${total_steps}] 清除 Android 缓存..." "[${step_num}/${total_steps}] Clearing Android cache..."
         ((step_num++))
         local android_dir="${PROJECT_ROOT}/plaud-android"
         if [[ -d "$android_dir" ]]; then
@@ -544,23 +544,23 @@ clean_cache() {
 
             for dir in "${android_dirs[@]}"; do
                 if [[ -d "$dir" ]]; then
-                    echo -e "${CYAN}  删除: ${dir}${NC}"
+                    echo -e "${CYAN}  删除 / Removing: ${dir}${NC}"
                     if rm -rf "$dir" 2>/dev/null; then
                         ((cleaned_count++))
                     else
-                        echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                        echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir} / Warning: could not remove ${dir}${NC}"
                         ((failed_count++))
                     fi
                 fi
             done
         else
-            echo -e "${YELLOW}  跳过: Android 目录不存在${NC}"
+            echo -e "${YELLOW}  跳过: Android 目录不存在 / Skipped: Android directory not found${NC}"
         fi
         echo ""
     fi
 
     if [[ "$clean_ios" == "true" ]]; then
-        echo -e "${CYAN}[${step_num}/${total_steps}] 清除 iOS 缓存...${NC}"
+        echo_bi "$CYAN" "[${step_num}/${total_steps}] 清除 iOS 缓存..." "[${step_num}/${total_steps}] Clearing iOS cache..."
         local ios_dir="${PROJECT_ROOT}/plaud-ios"
         if [[ -d "$ios_dir" ]]; then
             local ios_dirs=(
@@ -571,11 +571,11 @@ clean_cache() {
 
             for dir in "${ios_dirs[@]}"; do
                 if [[ -d "$dir" ]]; then
-                    echo -e "${CYAN}  删除: ${dir}${NC}"
+                    echo -e "${CYAN}  删除 / Removing: ${dir}${NC}"
                     if rm -rf "$dir" 2>/dev/null; then
                         ((cleaned_count++))
                     else
-                        echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir}${NC}"
+                        echo -e "${BOLD_YELLOW}  警告: 无法删除 ${dir} / Warning: could not remove ${dir}${NC}"
                         ((failed_count++))
                     fi
                 fi
@@ -583,25 +583,25 @@ clean_cache() {
 
             local xcode_derived_data="${HOME}/Library/Developer/Xcode/DerivedData"
             if [[ -d "$xcode_derived_data" ]]; then
-                echo -e "${CYAN}  清除 Xcode DerivedData...${NC}"
-                echo -e "${YELLOW}  提示: Xcode DerivedData 位于 ${xcode_derived_data}${NC}"
-                echo -e "${YELLOW}  如需清除，请手动删除或使用 Xcode 的 Product > Clean Build Folder${NC}"
+                echo_bi "$CYAN" "  清除 Xcode DerivedData..." "  Clearing Xcode DerivedData..."
+                echo -e "${YELLOW}  提示: Xcode DerivedData 位于 ${xcode_derived_data} / Tip: Xcode DerivedData is at ${xcode_derived_data}${NC}"
+                echo -e "${YELLOW}  如需清除，请手动删除或使用 Xcode 的 Product > Clean Build Folder / To clear it, delete manually or use Xcode's Product > Clean Build Folder${NC}"
             fi
         else
-            echo -e "${YELLOW}  跳过: iOS 目录不存在${NC}"
+            echo -e "${YELLOW}  跳过: iOS 目录不存在 / Skipped: iOS directory not found${NC}"
         fi
         echo ""
     fi
 
     echo -e "${BLUE}========================================${NC}"
     if [[ $cleaned_count -gt 0 ]]; then
-        echo -e "${GREEN}${CHECK_MARK} 成功清除 ${cleaned_count} 个缓存目录${NC}"
+        echo -e "${GREEN}${CHECK_MARK} 成功清除 ${cleaned_count} 个缓存目录 / Cleared ${cleaned_count} cache directory(ies)${NC}"
     fi
     if [[ $failed_count -gt 0 ]]; then
-        echo -e "${BOLD_RED}${CROSS_MARK} 清除失败 ${failed_count} 个目录${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} 清除失败 ${failed_count} 个目录 / Failed to clear ${failed_count} directory(ies)${NC}"
     fi
     if [[ $cleaned_count -eq 0 ]] && [[ $failed_count -eq 0 ]]; then
-        echo -e "${YELLOW}没有找到需要清除的缓存${NC}"
+        echo -e "${YELLOW}没有找到需要清除的缓存 / No caches found to clear${NC}"
     fi
     echo -e "${BLUE}========================================${NC}"
 
@@ -636,7 +636,7 @@ go_android() {
                 ;;
             -c|--c|--channel)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --channel 需要指定渠道名称${NC}"
+                    echo_bi "$BOLD_RED" "错误: --channel 需要指定渠道名称" "Error: --channel requires a channel name"
                     return 1
                 fi
                 channel="$2"
@@ -647,39 +647,39 @@ go_android() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
                 return 1
                 ;;
         esac
     done
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  执行 go 命令（prebuild + install）${NC}"
+    echo_bi "$BLUE" "  执行 go 命令（prebuild + install）" "  Running go command (prebuild + install)"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
-    echo -e "${CYAN}[1/2] 执行 prebuild...${NC}"
+    echo_bi "$CYAN" "[1/2] 执行 prebuild..." "[1/2] Running prebuild..."
     echo ""
     local prebuild_exit_code=0
     capture_command_exit prebuild_exit_code prebuild
     if [[ $prebuild_exit_code -ne 0 ]]; then
-        echo -e "${BOLD_RED}错误: prebuild 失败，无法继续${NC}"
-        print_composite_failure "go 命令" "prebuild 步骤失败"
+        echo_bi "$BOLD_RED" "错误: prebuild 失败，无法继续" "Error: prebuild failed, cannot continue"
+        print_composite_failure "go 命令" "go command" "prebuild 步骤失败" "prebuild step failed"
         return "$prebuild_exit_code"
     fi
     echo ""
 
-    echo -e "${CYAN}[2/2] 执行 install...${NC}"
+    echo_bi "$CYAN" "[2/2] 执行 install..." "[2/2] Running install..."
     echo ""
     local install_exit_code=0
     capture_command_exit install_exit_code _install_android_internal "$market" "$build_type" "$channel" "$build_all_channels"
 
     if [[ $install_exit_code -ne 0 ]]; then
-        print_composite_failure "go 命令" "install 步骤失败"
+        print_composite_failure "go 命令" "go command" "install 步骤失败" "install step failed"
         return "$install_exit_code"
     fi
 
-    print_composite_success "go 命令"
+    print_composite_success "go 命令" "go command"
     return 0
 }
 
@@ -688,25 +688,25 @@ prebuild() {
     local build_all_script="${PROJECT_ROOT}/build_all.sh"
 
     if [[ ! -f "$build_all_script" ]]; then
-        echo -e "${BOLD_RED}错误: build_all.sh 不存在: ${build_all_script}${NC}"
+        echo_bi "$BOLD_RED" "错误: build_all.sh 不存在: ${build_all_script}" "Error: build_all.sh not found: ${build_all_script}"
         return 1
     fi
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  开始构建 Flutter 模块${NC}"
+    echo_bi "$BLUE" "  开始构建 Flutter 模块" "  Building Flutter module"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
-    echo -e "${BLUE}执行 build_all.sh...${NC}"
+    echo_bi "$BLUE" "执行 build_all.sh..." "Running build_all.sh..."
     print_command "$PROJECT_ROOT" bash "$build_all_script"
 
     (cd "$PROJECT_ROOT" && bash "$build_all_script" 2>&1) || {
-        echo -e "${BOLD_RED}${CROSS_MARK} Flutter 模块构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} Flutter 模块构建失败 / Flutter module build failed${NC}"
         return 1
     }
 
     echo ""
-    echo -e "${BOLD_GREEN}${CHECK_MARK} Flutter 模块构建成功！${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} Flutter 模块构建成功！/ Flutter module build succeeded!${NC}"
     echo -e "${BLUE}========================================${NC}"
     return 0
 }
@@ -730,16 +730,16 @@ build_check() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
                 exit 1
                 ;;
         esac
     done
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  编译检查：同时构建 CN 和 Global${NC}"
+    echo_bi "$BLUE" "  编译检查：同时构建 CN 和 Global" "  Build check: building CN and Global"
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${CYAN}构建类型: ${build_type}${NC}"
+    echo_bi "$CYAN" "构建类型: ${build_type}" "Build type: ${build_type}"
     echo ""
 
     local success=true
@@ -747,47 +747,47 @@ build_check() {
     local global_success=false
 
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}构建 CN 版本${NC}"
+    echo_bi "$YELLOW" "构建 CN 版本" "Building CN build"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     _build_android_internal cn "$build_type" "" "false" "true" 2>&1
     local cn_exit_code=$?
 
     if [[ $cn_exit_code -eq 0 ]]; then
-        echo -e "${BOLD_GREEN}${CHECK_MARK} CN 构建成功${NC}"
+        echo -e "${BOLD_GREEN}${CHECK_MARK} CN 构建成功 / CN build succeeded${NC}"
         cn_success=true
     else
-        echo -e "${BOLD_RED}${CROSS_MARK} CN 构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} CN 构建失败 / CN build failed${NC}"
         success=false
     fi
     echo ""
 
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}构建 Global 版本${NC}"
+    echo_bi "$YELLOW" "构建 Global 版本" "Building Global build"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     _build_android_internal global "$build_type" "" "false" "true" 2>&1
     local global_exit_code=$?
 
     if [[ $global_exit_code -eq 0 ]]; then
-        echo -e "${BOLD_GREEN}${CHECK_MARK} Global 构建成功${NC}"
+        echo -e "${BOLD_GREEN}${CHECK_MARK} Global 构建成功 / Global build succeeded${NC}"
         global_success=true
     else
-        echo -e "${BOLD_RED}${CROSS_MARK} Global 构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} Global 构建失败 / Global build failed${NC}"
         success=false
     fi
     echo ""
 
     echo -e "${BLUE}========================================${NC}"
     if [[ "$cn_success" == true ]] && [[ "$global_success" == true ]]; then
-        echo -e "${GREEN}${CHECK_MARK} 编译检查通过：CN 和 Global 构建成功${NC}"
+        echo -e "${GREEN}${CHECK_MARK} 编译检查通过：CN 和 Global 构建成功 / Build check passed: CN and Global builds succeeded${NC}"
         echo -e "${BLUE}========================================${NC}"
         return 0
     else
-        echo -e "${RED}${CROSS_MARK} 编译检查失败：部分构建失败${NC}"
+        echo -e "${RED}${CROSS_MARK} 编译检查失败：部分构建失败 / Build check failed: some builds failed${NC}"
         if [[ "$cn_success" == false ]]; then
-            echo -e "${RED}  - CN 构建失败${NC}"
+            echo -e "${RED}  - CN 构建失败 / CN build failed${NC}"
         fi
         if [[ "$global_success" == false ]]; then
-            echo -e "${RED}  - Global 构建失败${NC}"
+            echo -e "${RED}  - Global 构建失败 / Global build failed${NC}"
         fi
         echo -e "${BLUE}========================================${NC}"
         return 1
@@ -800,26 +800,26 @@ _build_ios_internal() {
     local build_type="$2"
 
     if [[ "$market" != "cn" ]] && [[ "$market" != "global" ]]; then
-        echo -e "${BOLD_RED}错误: 市场参数必须是 cn 或 global${NC}"
+        echo_bi "$BOLD_RED" "错误: 市场参数必须是 cn 或 global" "Error: the market argument must be cn or global"
         return 1
     fi
 
     if [[ "$build_type" != "debug" ]] && [[ "$build_type" != "release" ]]; then
-        echo -e "${BOLD_RED}错误: 构建类型必须是 debug 或 release${NC}"
+        echo_bi "$BOLD_RED" "错误: 构建类型必须是 debug 或 release" "Error: the build type must be debug or release"
         return 1
     fi
 
     local ios_dir="${PROJECT_ROOT}/plaud-ios"
     if [[ ! -d "$ios_dir" ]]; then
-        echo -e "${BOLD_RED}错误: iOS 项目目录不存在: $ios_dir${NC}"
+        echo_bi "$BOLD_RED" "错误: iOS 项目目录不存在: $ios_dir" "Error: iOS project directory not found: $ios_dir"
         return 1
     fi
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  开始构建 iOS 包${NC}"
+    echo_bi "$BLUE" "  开始构建 iOS 包" "  Building iOS package"
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${CYAN}市场: ${market}${NC}"
-    echo -e "${CYAN}构建类型: ${build_type}${NC}"
+    echo_bi "$CYAN" "市场: ${market}" "Market: ${market}"
+    echo_bi "$CYAN" "构建类型: ${build_type}" "Build type: ${build_type}"
     echo ""
 
     local scheme=""
@@ -839,20 +839,20 @@ _build_ios_internal() {
     export FLUTTER_MODULE="$market"
 
     if ! command -v xcodebuild &> /dev/null; then
-        echo -e "${BOLD_RED}错误: xcodebuild 命令不可用，请确保已安装 Xcode${NC}"
+        echo_bi "$BOLD_RED" "错误: xcodebuild 命令不可用，请确保已安装 Xcode" "Error: xcodebuild command not available; make sure Xcode is installed"
         return 1
     fi
 
     local workspace="${ios_dir}/PLAUD/PLAUD.xcworkspace"
     if [[ ! -d "$workspace" ]]; then
-        echo -e "${BOLD_RED}错误: Xcode workspace 不存在: $workspace${NC}"
+        echo_bi "$BOLD_RED" "错误: Xcode workspace 不存在: $workspace" "Error: Xcode workspace not found: $workspace"
         return 1
     fi
 
     local derived_data_path="${ios_dir}/PLAUD/build"
     mkdir -p "$derived_data_path"
 
-    echo -e "${BLUE}[1/2] 执行 xcodebuild 构建...${NC}"
+    echo_bi "$BLUE" "[1/2] 执行 xcodebuild 构建..." "[1/2] Running xcodebuild..."
     echo -e "${CYAN}Scheme: ${scheme}${NC}"
     echo -e "${CYAN}Configuration: ${configuration}${NC}"
     echo -e "${CYAN}FLUTTER_MODULE: ${FLUTTER_MODULE}${NC}"
@@ -870,21 +870,21 @@ _build_ios_internal() {
         build \
         FLUTTER_MODULE="$market" \
         2>&1) || {
-        echo -e "${BOLD_RED}${CROSS_MARK} iOS 构建失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} iOS 构建失败 / iOS build failed${NC}"
         return 1
     }
 
     echo ""
 
-    echo -e "${BLUE}[2/2] 构建完成${NC}"
+    echo_bi "$BLUE" "[2/2] 构建完成" "[2/2] Build complete"
     echo ""
-    echo -e "${BOLD_GREEN}${CHECK_MARK} iOS 构建成功！${NC}"
+    echo -e "${BOLD_GREEN}${CHECK_MARK} iOS 构建成功！/ iOS build succeeded!${NC}"
 
     local build_dir="${derived_data_path}"
     local product_dir="${build_dir}/Build/Products/${configuration}-iphoneos"
 
     if [[ -d "$product_dir" ]]; then
-        echo -e "${BLUE}构建产物位置:${NC}"
+        echo_bi "$BLUE" "构建产物位置:" "Build artifact location:"
         find "$product_dir" -name "*.app" -type d 2>/dev/null | while read -r app; do
             local app_size
             app_size=$(du -sh "$app" | cut -f1)
@@ -892,7 +892,7 @@ _build_ios_internal() {
             echo -e "${CYAN}    ${app}${NC}"
         done
     elif [[ -d "$build_dir" ]]; then
-        echo -e "${BLUE}构建产物位置:${NC}"
+        echo_bi "$BLUE" "构建产物位置:" "Build artifact location:"
         find "$build_dir" -name "*.app" -type d 2>/dev/null | head -5 | while read -r app; do
             local app_size
             app_size=$(du -sh "$app" | cut -f1)
@@ -926,8 +926,8 @@ build_ios() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
-                echo -e "${YELLOW}用法: mt build:ios [cn|global] [-d|-r]${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
+                echo_bi "$YELLOW" "用法: mt build:ios [cn|global] [-d|-r]" "Usage: mt build:ios [cn|global] [-d|-r]"
                 return 1
                 ;;
         esac
@@ -950,7 +950,7 @@ _install_ios_internal() {
     local build_exit_code=$?
 
     if [[ $build_exit_code -ne 0 ]]; then
-        echo -e "${BOLD_RED}构建失败，无法安装${NC}"
+        echo_bi "$BOLD_RED" "构建失败，无法安装" "Build failed, cannot install"
         return $build_exit_code
     fi
 
@@ -1052,11 +1052,11 @@ _install_ios_internal() {
     fi
 
     if [[ ${#app_files[@]} -eq 0 ]]; then
-        echo -e "${BOLD_RED}错误: 未找到对应的 .app 文件${NC}"
-        echo -e "${YELLOW}请检查构建是否成功完成${NC}"
-        echo -e "${CYAN}预期构建目录: ${build_dir}${NC}"
-        echo -e "${CYAN}预期产物路径: ${product_dir}${NC}"
-        echo -e "${YELLOW}提示: 如果构建成功但找不到产物，请检查 Xcode DerivedData 目录${NC}"
+        echo_bi "$BOLD_RED" "错误: 未找到对应的 .app 文件" "Error: no matching .app file found"
+        echo_bi "$YELLOW" "请检查构建是否成功完成" "Please check whether the build completed successfully"
+        echo -e "${CYAN}预期构建目录 / Expected build directory: ${build_dir}${NC}"
+        echo -e "${CYAN}预期产物路径 / Expected artifact path: ${product_dir}${NC}"
+        echo -e "${YELLOW}提示: 如果构建成功但找不到产物，请检查 Xcode DerivedData 目录 / Tip: if the build succeeded but the artifact is missing, check the Xcode DerivedData directory${NC}"
         return 1
     fi
 
@@ -1064,7 +1064,7 @@ _install_ios_internal() {
 
     echo ""
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  开始安装到设备${NC}"
+    echo_bi "$BLUE" "  开始安装到设备" "  Installing to device"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
@@ -1119,59 +1119,59 @@ _install_ios_internal() {
     fi
 
     if [[ ${#devices[@]} -eq 0 ]]; then
-        echo -e "${BOLD_RED}错误: 未检测到已连接的 iOS 设备${NC}"
-        echo -e "${YELLOW}请确保:${NC}"
-        echo -e "${CYAN}  1. 设备已通过 USB 连接${NC}"
-        echo -e "${CYAN}  2. 设备已解锁并信任此计算机${NC}"
-        echo -e "${CYAN}  3. 已安装 Xcode 并同意许可协议${NC}"
-        echo -e "${YELLOW}提示: 也可以使用 Xcode 直接运行项目来安装${NC}"
+        echo_bi "$BOLD_RED" "错误: 未检测到已连接的 iOS 设备" "Error: no connected iOS device detected"
+        echo_bi "$YELLOW" "请确保:" "Please make sure:"
+        echo -e "${CYAN}  1. 设备已通过 USB 连接 / The device is connected via USB${NC}"
+        echo -e "${CYAN}  2. 设备已解锁并信任此计算机 / The device is unlocked and trusts this computer${NC}"
+        echo -e "${CYAN}  3. 已安装 Xcode 并同意许可协议 / Xcode is installed and its license is accepted${NC}"
+        echo -e "${YELLOW}提示: 也可以使用 Xcode 直接运行项目来安装 / Tip: you can also install by running the project directly from Xcode${NC}"
         return 1
     fi
 
     local selected_device=""
     if [[ ${#devices[@]} -eq 1 ]]; then
         selected_device="${devices[0]}"
-        echo -e "${CYAN}检测到设备: ${device_names[0]} (${selected_device})${NC}"
+        echo -e "${CYAN}检测到设备 / Detected device: ${device_names[0]} (${selected_device})${NC}"
     else
-        echo -e "${CYAN}检测到 ${#devices[@]} 个设备，请选择:${NC}"
+        echo -e "${CYAN}检测到 ${#devices[@]} 个设备，请选择 / Detected ${#devices[@]} devices, please choose:${NC}"
         for i in "${!devices[@]}"; do
             echo -e "${CYAN}  [$((i+1))] ${device_names[$i]} (${devices[$i]})${NC}"
         done
         echo ""
-        read -p "请输入设备编号 (1-${#devices[@]}): " device_choice
+        read -p "请输入设备编号 / Select device number (1-${#devices[@]}): " device_choice
 
         if [[ "$device_choice" =~ ^[0-9]+$ ]] && [[ "$device_choice" -ge 1 ]] && [[ "$device_choice" -le ${#devices[@]} ]]; then
             selected_device="${devices[$((device_choice-1))]}"
         else
-            echo -e "${BOLD_RED}错误: 无效的设备编号${NC}"
+            echo_bi "$BOLD_RED" "错误: 无效的设备编号" "Error: invalid device number"
             return 1
         fi
     fi
 
     echo ""
-    echo -e "${CYAN}安装: $(basename "$app_path")${NC}"
-    echo -e "${CYAN}路径: ${app_path}${NC}"
-    echo -e "${CYAN}设备: ${selected_device}${NC}"
+    echo -e "${CYAN}安装 / Installing: $(basename "$app_path")${NC}"
+    echo -e "${CYAN}路径 / Path: ${app_path}${NC}"
+    echo -e "${CYAN}设备 / Device: ${selected_device}${NC}"
     echo ""
 
     local install_success=false
 
     if command -v xcrun &> /dev/null; then
-        echo -e "${CYAN}使用 xcrun devicectl 安装...${NC}"
+        echo_bi "$CYAN" "使用 xcrun devicectl 安装..." "Installing via xcrun devicectl..."
         if xcrun devicectl device install app --device "$selected_device" "$app_path" 2>&1; then
             install_success=true
         fi
     fi
 
     if [[ "$install_success" == false ]] && command -v ios-deploy &> /dev/null; then
-        echo -e "${CYAN}使用 ios-deploy 安装...${NC}"
+        echo_bi "$CYAN" "使用 ios-deploy 安装..." "Installing via ios-deploy..."
         if ios-deploy --bundle "$app_path" --id "$selected_device" 2>&1; then
             install_success=true
         fi
     fi
 
     if [[ "$install_success" == false ]] && command -v xcrun &> /dev/null; then
-        echo -e "${CYAN}尝试使用 xcrun simctl 安装...${NC}"
+        echo_bi "$CYAN" "尝试使用 xcrun simctl 安装..." "Trying to install via xcrun simctl..."
         if xcrun simctl install "$selected_device" "$app_path" 2>&1; then
             install_success=true
         fi
@@ -1179,16 +1179,16 @@ _install_ios_internal() {
 
     if [[ "$install_success" == true ]]; then
         echo ""
-        echo -e "${BOLD_GREEN}  ${CHECK_MARK} 安装成功${NC}"
+        echo -e "${BOLD_GREEN}  ${CHECK_MARK} 安装成功 / Installed successfully${NC}"
         echo ""
         echo -e "${BLUE}========================================${NC}"
-        echo -e "${GREEN}${CHECK_MARK} iOS 应用安装成功！${NC}"
+        echo -e "${GREEN}${CHECK_MARK} iOS 应用安装成功！/ iOS app installed successfully!${NC}"
         echo -e "${BLUE}========================================${NC}"
         return 0
     else
         echo ""
-        echo -e "${BOLD_RED}  ${CROSS_MARK} 安装失败${NC}"
-        echo -e "${YELLOW}提示: 可以尝试使用 Xcode 直接运行项目来安装${NC}"
+        echo -e "${BOLD_RED}  ${CROSS_MARK} 安装失败 / Install failed${NC}"
+        echo -e "${YELLOW}提示: 可以尝试使用 Xcode 直接运行项目来安装 / Tip: you can also install by running the project directly from Xcode${NC}"
         echo ""
         echo -e "${BLUE}========================================${NC}"
         return 1
@@ -1215,8 +1215,8 @@ install_ios() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
-                echo -e "${YELLOW}用法: mt install ios [cn|global] [-d|-r]${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
+                echo_bi "$YELLOW" "用法: mt install ios [cn|global] [-d|-r]" "Usage: mt install ios [cn|global] [-d|-r]"
                 return 1
                 ;;
         esac

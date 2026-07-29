@@ -11,11 +11,11 @@ handle_init_command() {
 }
 
 handle_config_command() {
-    echo -e "${YELLOW}mt 已不再使用 .mt-config.yaml，当前版本默认固定支持 7 个仓库${NC}"
-    echo -e "${CYAN}可用入口:${NC}"
-    echo -e "${CYAN}  mt list${NC}               查看内置仓库列表"
-    echo -e "${CYAN}  mt doctor${NC}             检查工作区和仓库状态"
-    echo -e "${CYAN}  mt set-github-token <token>${NC}  设置 GitHub token"
+    echo_bi "$YELLOW" "mt 已不再使用 .mt-config.yaml，当前版本默认固定支持 7 个仓库" "mt no longer uses .mt-config.yaml; this version supports 7 repositories by default"
+    echo_bi "$CYAN" "可用入口:" "Available entry points:"
+    echo -e "${CYAN}  mt list${NC}               查看内置仓库列表 / List the built-in repositories"
+    echo -e "${CYAN}  mt doctor${NC}             检查工作区和仓库状态 / Check workspace and repository status"
+    echo -e "${CYAN}  mt set-github-token <token>${NC}  设置 GitHub token / Set the GitHub token"
     return 0
 }
 
@@ -25,9 +25,9 @@ handle_clone_command() {
 
 handle_set_github_token_command() {
     if [[ -z "${1:-}" ]]; then
-        echo -e "${BOLD_RED}错误: 请提供 GitHub token${NC}"
-        echo -e "${YELLOW}用法: mt set-github-token <your_token>${NC}"
-        echo -e "${CYAN}获取 token: https://github.com/settings/tokens${NC}"
+        echo_bi "$BOLD_RED" "错误: 请提供 GitHub token" "Error: please provide a GitHub token"
+        echo_bi "$YELLOW" "用法: mt set-github-token <your_token>" "Usage: mt set-github-token <your_token>"
+        echo_bi "$CYAN" "获取 token: https://github.com/settings/tokens" "Get a token: https://github.com/settings/tokens"
         return 1
     fi
     set_github_token "$1"
@@ -151,11 +151,11 @@ handle_rebuild_command() {
     local kind; kind=$(require_project_kind) || exit $?
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  执行 rebuild（清理缓存 + 重新构建）${NC}"
+    echo_bi "$BLUE" "  执行 rebuild（清理缓存 + 重新构建）" "  Running rebuild (clean cache + rebuild)"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
-    echo -e "${CYAN}[1/2] 清理缓存...${NC}"
+    echo_bi "$CYAN" "[1/2] 清理缓存..." "[1/2] Cleaning cache..."
     echo ""
     local clean_exit_code=0
     if [[ "$kind" == "native-app2" ]]; then
@@ -164,13 +164,13 @@ handle_rebuild_command() {
         capture_command_exit clean_exit_code clean_cache
     fi
     if [[ $clean_exit_code -ne 0 ]]; then
-        echo -e "${BOLD_RED}错误: 清理缓存失败${NC}"
-        print_composite_failure "rebuild 命令" "clean 步骤失败"
+        echo_bi "$BOLD_RED" "错误: 清理缓存失败" "Error: clean cache failed"
+        print_composite_failure "rebuild 命令" "rebuild command" "clean 步骤失败" "clean step failed"
         return "$clean_exit_code"
     fi
     echo ""
 
-    echo -e "${CYAN}[2/2] 重新构建...${NC}"
+    echo_bi "$CYAN" "[2/2] 重新构建..." "[2/2] Rebuilding..."
     echo ""
     local go_exit_code=0
     if [[ "$kind" == "native-app2" ]]; then
@@ -188,11 +188,11 @@ handle_rebuild_command() {
     fi
 
     if [[ $go_exit_code -ne 0 ]]; then
-        print_composite_failure "rebuild 命令" "go 步骤失败"
+        print_composite_failure "rebuild 命令" "rebuild command" "go 步骤失败" "go step failed"
         return "$go_exit_code"
     fi
 
-    print_composite_success "rebuild 命令"
+    print_composite_success "rebuild 命令" "rebuild command"
     return 0
 }
 
@@ -206,7 +206,7 @@ handle_pr_command() {
         case "$1" in
             -b|--b|--base)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --base 需要指定目标分支${NC}"
+                    echo_bi "$BOLD_RED" "错误: --base 需要指定目标分支" "Error: --base requires a target branch"
                     return 1
                 fi
                 target_branch="$2"
@@ -214,7 +214,7 @@ handle_pr_command() {
                 ;;
             -t|--t|--title)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --title 需要指定 PR 标题${NC}"
+                    echo_bi "$BOLD_RED" "错误: --title 需要指定 PR 标题" "Error: --title requires a PR title"
                     return 1
                 fi
                 title="$2"
@@ -222,7 +222,7 @@ handle_pr_command() {
                 ;;
             -d|--d|--description)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --description 需要指定 PR 描述${NC}"
+                    echo_bi "$BOLD_RED" "错误: --description 需要指定 PR 描述" "Error: --description requires a PR description"
                     return 1
                 fi
                 description="$2"
@@ -233,8 +233,8 @@ handle_pr_command() {
                 shift
                 ;;
             *)
-                echo -e "${BOLD_RED}错误: 未知参数: $1${NC}"
-                echo -e "${YELLOW}用法: mt pr [-b <branch>] [-t <title>] [-d <description>] [-r]${NC}"
+                echo_bi "$BOLD_RED" "错误: 未知参数: $1" "Error: unknown argument: $1"
+                echo_bi "$YELLOW" "用法: mt pr [-b <branch>] [-t <title>] [-d <description>] [-r]" "Usage: mt pr [-b <branch>] [-t <title>] [-d <description>] [-r]"
                 return 1
                 ;;
         esac
@@ -265,7 +265,7 @@ handle_plaud_command() {
                     mt_plaud_log_time_diff "$@"
                     ;;
                 *)
-                    echo -e "${BOLD_RED}错误: 未知的 plaud log 子命令: ${1:-}${NC}"
+                    echo_bi "$BOLD_RED" "错误: 未知的 plaud log 子命令: ${1:-}" "Error: unknown plaud log subcommand: ${1:-}"
                     return 1
                     ;;
             esac
@@ -278,7 +278,7 @@ handle_plaud_command() {
                     mt_plaud_check_opus "$@"
                     ;;
                 *)
-                    echo -e "${BOLD_RED}错误: 未知的 plaud check 子命令: ${1:-}${NC}"
+                    echo_bi "$BOLD_RED" "错误: 未知的 plaud check 子命令: ${1:-}" "Error: unknown plaud check subcommand: ${1:-}"
                     return 1
                     ;;
             esac
@@ -292,7 +292,7 @@ handle_plaud_command() {
             mt_plaud_decrypt "$@"
             ;;
         *)
-            echo -e "${BOLD_RED}错误: 未知的 plaud 子命令: ${1:-}${NC}"
+            echo_bi "$BOLD_RED" "错误: 未知的 plaud 子命令: ${1:-}" "Error: unknown plaud subcommand: ${1:-}"
             return 1
             ;;
     esac
@@ -311,10 +311,10 @@ print_supported_command_overview() {
     for category in tool build plaud pr; do
         local label=""
         case "$category" in
-            tool) label="工具命令" ;;
-            build) label="构建命令" ;;
-            plaud) label="Plaud 工具" ;;
-            pr) label="PR 命令" ;;
+            tool) label="工具命令 / Tool" ;;
+            build) label="构建命令 / Build" ;;
+            plaud) label="Plaud 工具 / Plaud tools" ;;
+            pr) label="PR 命令 / PR" ;;
         esac
 
         local names=()
@@ -369,13 +369,13 @@ main() {
         return $?
     fi
 
-    echo -e "${BOLD_RED}错误: 不支持的命令: ${first_arg}${NC}"
+    echo_bi "$BOLD_RED" "错误: 不支持的命令: ${first_arg}" "Error: unsupported command: ${first_arg}"
     echo ""
-    echo -e "${YELLOW}支持的命令:${NC}"
+    echo_bi "$YELLOW" "支持的命令:" "Supported commands:"
     print_supported_command_overview
-    echo -e "${CYAN}  Git 命令: ${SUPPORTED_GIT_COMMANDS[*]}${NC}"
-    echo -e "${CYAN}  Git 缩写: $(get_git_alias_names)${NC}"
+    echo -e "${CYAN}  Git 命令 / Git commands: ${SUPPORTED_GIT_COMMANDS[*]}${NC}"
+    echo -e "${CYAN}  Git 缩写 / Git aliases: $(get_git_alias_names)${NC}"
     echo ""
-    echo -e "${YELLOW}使用 \"mt help\" 查看详细帮助信息${NC}"
+    echo_bi "$YELLOW" "使用 \"mt help\" 查看详细帮助信息" "Run \"mt help\" for detailed help"
     return 1
 }

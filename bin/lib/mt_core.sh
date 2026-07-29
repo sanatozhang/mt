@@ -1,3 +1,17 @@
+# 双语输出: 中文一行 + 英文一行，共用同一颜色
+echo_bi() {
+    local color="$1" zh="$2" en="$3"
+    echo -e "${color}${zh}${NC}"
+    echo -e "${color}${en}${NC}"
+}
+
+# 同上，输出到 stderr
+echo_bi_err() {
+    local color="$1" zh="$2" en="$3"
+    echo -e "${color}${zh}${NC}" >&2
+    echo -e "${color}${en}${NC}" >&2
+}
+
 reset_global_options() {
     GLOBAL_SCOPE="all"
     GLOBAL_ONLY_REPOS=()
@@ -32,7 +46,7 @@ parse_global_options() {
                 ;;
             --only)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --only 需要指定仓库名或路径${NC}" >&2
+                    echo_bi_err "$BOLD_RED" "错误: --only 需要指定仓库名或路径" "Error: --only requires a repo name or path"
                     return 1
                 fi
                 GLOBAL_ONLY_REPOS+=("$2")
@@ -40,7 +54,7 @@ parse_global_options() {
                 ;;
             --exclude)
                 if [[ -z "${2:-}" ]]; then
-                    echo -e "${BOLD_RED}错误: --exclude 需要指定仓库名或路径${NC}" >&2
+                    echo_bi_err "$BOLD_RED" "错误: --exclude 需要指定仓库名或路径" "Error: --exclude requires a repo name or path"
                     return 1
                 fi
                 GLOBAL_EXCLUDE_REPOS+=("$2")
@@ -78,7 +92,7 @@ parse_global_options() {
                 break
                 ;;
             -*)
-                echo -e "${BOLD_RED}错误: 未知的全局参数: $1${NC}" >&2
+                echo_bi_err "$BOLD_RED" "错误: 未知的全局参数: $1" "Error: unknown global option: $1"
                 return 1
                 ;;
             *)
@@ -191,7 +205,7 @@ filter_repositories() {
     if [[ "$GLOBAL_SCOPE" == "current" ]]; then
         current_repo=$(get_current_repo_info "${repos[@]}" 2>/dev/null || echo "")
         if [[ -z "$current_repo" ]]; then
-            echo -e "${BOLD_RED}错误: 当前目录不在任何已知仓库内，无法使用 --current${NC}" >&2
+            echo_bi_err "$BOLD_RED" "错误: 当前目录不在任何已知仓库内，无法使用 --current" "Error: current directory is not inside any known repository, --current cannot be used"
             return 1
         fi
     fi
@@ -282,7 +296,7 @@ should_confirm_action() {
 
 confirm_action() {
     local risky="${1:-false}"
-    local message="${2:-是否继续?}"
+    local message="${2:-是否继续 / Continue?}"
 
     if ! should_confirm_action "$risky"; then
         return 0
@@ -440,12 +454,12 @@ check_version_update() {
 
                 echo "" >&2
                 echo -e "${BOLD_YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" >&2
-                echo -e "${BOLD_YELLOW}  ⚠  发现新版本！${NC}" >&2
+                echo_bi_err "$BOLD_YELLOW" "  ⚠  发现新版本！" "  ⚠  New version available!"
                 echo -e "${BOLD_YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" >&2
-                echo -e "${CYAN}  当前版本: ${local_commit:0:8}${NC}" >&2
-                echo -e "${CYAN}  最新版本: ${remote_commit:0:8}${NC}" >&2
+                echo_bi_err "$CYAN" "  当前版本: ${local_commit:0:8}" "  Current version: ${local_commit:0:8}"
+                echo_bi_err "$CYAN" "  最新版本: ${remote_commit:0:8}" "  Latest version: ${remote_commit:0:8}"
                 echo "" >&2
-                echo -e "${YELLOW}  运行以下命令更新到最新版本:${NC}" >&2
+                echo_bi_err "$YELLOW" "  运行以下命令更新到最新版本:" "  Run the following command to update:"
                 echo -e "${BOLD_CYAN}    mt upgrade${NC}" >&2
                 echo -e "${BOLD_YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" >&2
                 echo "" >&2
@@ -579,16 +593,16 @@ require_project_kind() {
     kind=$(detect_project_kind)
 
     if [[ "$kind" == "unknown" ]]; then
-        echo -e "${BOLD_RED}错误: 当前目录不在已知工作区${NC}" >&2
-        echo -e "${YELLOW}当前目录: $(pwd)${NC}" >&2
+        echo_bi_err "$BOLD_RED" "错误: 当前目录不在已知工作区" "Error: current directory is not inside a known workspace"
+        echo_bi_err "$YELLOW" "当前目录: $(pwd)" "Current directory: $(pwd)"
         echo -e "${YELLOW}PROJECT_ROOT: ${PROJECT_ROOT}${NC}" >&2
-        echo -e "${YELLOW}已支持的工作区:${NC}" >&2
+        echo_bi_err "$YELLOW" "已支持的工作区:" "Supported workspaces:"
         local profile_info=""
         for profile_info in "${PROJECT_PROFILES[@]}"; do
             IFS='|' read -r p_name p_marker _rest <<< "$profile_info"
             echo -e "${CYAN}  - ${p_name} (marker: ${p_marker})${NC}" >&2
         done
-        echo -e "${YELLOW}请 cd 到对应项目根目录后重试${NC}" >&2
+        echo_bi_err "$YELLOW" "请 cd 到对应项目根目录后重试" "Please cd into the matching project root and retry"
         exit 1
     fi
 
@@ -706,21 +720,26 @@ capture_command_output() {
     return 0
 }
 
+# 参数: command_name_zh command_name_en reason_zh reason_en
 print_composite_failure() {
-    local command_name="$1"
-    local reason="$2"
+    local command_name_zh="$1"
+    local command_name_en="$2"
+    local reason_zh="$3"
+    local reason_en="$4"
 
     echo ""
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BOLD_RED}${CROSS_MARK} ${command_name}失败: ${reason}${NC}"
+    echo_bi "$BOLD_RED" "${CROSS_MARK} ${command_name_zh}失败: ${reason_zh}" "${CROSS_MARK} ${command_name_en} failed: ${reason_en}"
     echo -e "${BLUE}========================================${NC}"
 }
 
+# 参数: command_name_zh command_name_en
 print_composite_success() {
-    local command_name="$1"
+    local command_name_zh="$1"
+    local command_name_en="$2"
 
     echo ""
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BOLD_GREEN}${CHECK_MARK} ${command_name}完成${NC}"
+    echo_bi "$BOLD_GREEN" "${CHECK_MARK} ${command_name_zh}完成" "${CHECK_MARK} ${command_name_en} completed"
     echo -e "${BLUE}========================================${NC}"
 }

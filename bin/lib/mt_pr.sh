@@ -531,7 +531,7 @@ create_github_pr() {
     local repo_info_exit_code=0
     capture_command_output repo_full_name repo_info_exit_code get_repo_info "$repo_path"
     if [[ -z "$repo_full_name" ]]; then
-        echo -e "${BOLD_RED}错误: 无法获取仓库信息: ${path}${NC}"
+        echo_bi "$BOLD_RED" "错误: 无法获取仓库信息: ${path}" "Error: could not resolve repository info: ${path}"
         return 1
     fi
 
@@ -540,8 +540,8 @@ create_github_pr() {
     local branch_exists
     branch_exists=$(cd "$repo_path" && git ls-remote --heads origin "$source_branch" 2>/dev/null | grep -q "$source_branch" && echo "yes" || echo "no")
     if [[ "$branch_exists" == "no" ]]; then
-        echo -e "${BOLD_YELLOW}警告: 分支 ${source_branch} 不存在于远程${NC}" >&2
-        echo -e "${YELLOW}请先推送分支: git push origin ${source_branch}${NC}" >&2
+        echo_bi_err "$BOLD_YELLOW" "警告: 分支 ${source_branch} 不存在于远程" "Warning: branch ${source_branch} does not exist on the remote"
+        echo_bi_err "$YELLOW" "请先推送分支: git push origin ${source_branch}" "Please push the branch first: git push origin ${source_branch}"
         return 1
     fi
 
@@ -555,11 +555,11 @@ create_github_pr() {
     local common_base
     common_base=$(cd "$repo_path" && git merge-base "origin/${target_branch}" "origin/${source_branch}" 2>/dev/null || echo "")
     if [[ -z "$common_base" ]]; then
-        echo -e "${BOLD_YELLOW}警告: 分支 ${source_branch} 和 ${target_branch} 没有共同历史${NC}" >&2
-        echo -e "${YELLOW}这可能是因为分支是从不同的提交创建的${NC}" >&2
-        echo -e "${YELLOW}解决方案:${NC}" >&2
-        echo -e "${CYAN}  1. 确保分支是从 ${target_branch} 创建的${NC}" >&2
-        echo -e "${CYAN}  2. 或者先合并 ${target_branch} 到 ${source_branch}:${NC}" >&2
+        echo_bi_err "$BOLD_YELLOW" "警告: 分支 ${source_branch} 和 ${target_branch} 没有共同历史" "Warning: branch ${source_branch} and ${target_branch} share no common history"
+        echo_bi_err "$YELLOW" "这可能是因为分支是从不同的提交创建的" "This may be because the branches were created from different commits"
+        echo_bi_err "$YELLOW" "解决方案:" "Suggested fix:"
+        echo -e "${CYAN}  1. 确保分支是从 ${target_branch} 创建的 / Make sure the branch was created from ${target_branch}${NC}" >&2
+        echo -e "${CYAN}  2. 或者先合并 ${target_branch} 到 ${source_branch} / Or merge ${target_branch} into ${source_branch} first:${NC}" >&2
         echo -e "${CYAN}     git checkout ${source_branch}${NC}" >&2
         echo -e "${CYAN}     git merge origin/${target_branch}${NC}" >&2
         echo -e "${CYAN}     git push origin ${source_branch}${NC}" >&2
@@ -569,7 +569,7 @@ create_github_pr() {
     local ahead
     ahead=$(cd "$repo_path" && git rev-list --count "${common_base}..origin/${source_branch}" 2>/dev/null || echo "0")
     if [[ "$ahead" -eq 0 ]]; then
-        echo -e "${BOLD_YELLOW}警告: 分支 ${source_branch} 没有相对于 ${target_branch} 的新提交${NC}" >&2
+        echo_bi_err "$BOLD_YELLOW" "警告: 分支 ${source_branch} 没有相对于 ${target_branch} 的新提交" "Warning: branch ${source_branch} has no new commits relative to ${target_branch}"
         return 1
     fi
 
@@ -656,86 +656,86 @@ EOF
                     fi
 
                     if [[ "$historical_pr_merged" == "true" ]]; then
-                        echo -e "${BOLD_YELLOW}警告: 检测到历史 PR 已合并，当前仓库不会自动复用旧 PR${NC}" >&2
+                        echo -e "${BOLD_YELLOW}警告: 检测到历史 PR 已合并，当前仓库不会自动复用旧 PR / Warning: found a merged historical PR; this repo will not auto-reuse the old PR${NC}" >&2
                     else
-                        echo -e "${BOLD_YELLOW}警告: 检测到历史 PR 已关闭，请检查是否需要 reopen${NC}" >&2
+                        echo -e "${BOLD_YELLOW}警告: 检测到历史 PR 已关闭，请检查是否需要 reopen / Warning: found a closed historical PR; check whether it needs reopening${NC}" >&2
                     fi
-                    echo -e "${CYAN}历史 PR: ${historical_pr_url}${NC}" >&2
+                    echo -e "${CYAN}历史 PR / Historical PR: ${historical_pr_url}${NC}" >&2
                     echo "$historical_pr_url"
                     return 2
                 fi
             fi
 
-            echo -e "${BOLD_YELLOW}警告: GitHub 返回 PR 已存在，但未能查询到对应 PR 链接${NC}" >&2
+            echo_bi_err "$BOLD_YELLOW" "警告: GitHub 返回 PR 已存在，但未能查询到对应 PR 链接" "Warning: GitHub reported the PR already exists, but its link could not be resolved"
             return 2
         fi
 
-        echo -e "${BOLD_RED}错误: 创建 PR 失败 (HTTP ${http_code})${NC}" >&2
-        echo -e "${RED}仓库: ${name}${NC}" >&2
+        echo_bi_err "$BOLD_RED" "错误: 创建 PR 失败 (HTTP ${http_code})" "Error: failed to create PR (HTTP ${http_code})"
+        echo -e "${RED}仓库 / Repository: ${name}${NC}" >&2
 
         if echo "$body" | grep -q "no history in common"; then
-            echo -e "${YELLOW}原因: 分支 ${source_branch} 和 ${target_branch} 没有共同历史${NC}" >&2
-            echo -e "${YELLOW}解决方案:${NC}" >&2
-            echo -e "${CYAN}  1. 确保分支已推送到远程: git push origin ${source_branch}${NC}" >&2
-            echo -e "${CYAN}  2. 如果分支是从其他分支创建的，需要先合并 ${target_branch}:${NC}" >&2
+            echo_bi_err "$YELLOW" "原因: 分支 ${source_branch} 和 ${target_branch} 没有共同历史" "Reason: branch ${source_branch} and ${target_branch} share no common history"
+            echo_bi_err "$YELLOW" "解决方案:" "Suggested fix:"
+            echo -e "${CYAN}  1. 确保分支已推送到远程 / Make sure the branch is pushed to the remote: git push origin ${source_branch}${NC}" >&2
+            echo -e "${CYAN}  2. 如果分支是从其他分支创建的，需要先合并 ${target_branch} / If the branch was created from another branch, merge ${target_branch} first:${NC}" >&2
             echo -e "${CYAN}     git checkout ${source_branch}${NC}" >&2
             echo -e "${CYAN}     git merge ${target_branch}${NC}" >&2
             echo -e "${CYAN}     git push origin ${source_branch}${NC}" >&2
         elif echo "$body" | grep -q "Validation Failed"; then
-            echo -e "${YELLOW}GitHub API 验证失败:${NC}" >&2
+            echo_bi_err "$YELLOW" "GitHub API 验证失败:" "GitHub API validation failed:"
             local error_msg
             error_msg=$(echo "$body" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
             if [[ -n "$error_msg" ]]; then
-                echo -e "${RED}  错误消息: ${error_msg}${NC}" >&2
+                echo -e "${RED}  错误消息 / Error message: ${error_msg}${NC}" >&2
             fi
             local errors
             errors=$(echo "$body" | grep -o '"errors":\[[^\]]*\]' | head -1)
             if [[ -n "$errors" ]]; then
-                echo -e "${YELLOW}  详细错误:${NC}" >&2
+                echo_bi_err "$YELLOW" "  详细错误:" "  Error details:"
                 echo -e "${RED}  ${errors}${NC}" >&2
             fi
-            echo -e "${YELLOW}  完整响应:${NC}" >&2
+            echo_bi_err "$YELLOW" "  完整响应:" "  Full response:"
             echo -e "${CYAN}  ${body}${NC}" >&2
         else
-            echo -e "${YELLOW}错误详情:${NC}" >&2
+            echo_bi_err "$YELLOW" "错误详情:" "Error details:"
             echo -e "${RED}  ${body}${NC}" >&2
         fi
         return 1
     else
-        echo -e "${BOLD_RED}错误: 创建 PR 失败 (HTTP ${http_code})${NC}" >&2
-        echo -e "${RED}仓库: ${name}${NC}" >&2
+        echo_bi_err "$BOLD_RED" "错误: 创建 PR 失败 (HTTP ${http_code})" "Error: failed to create PR (HTTP ${http_code})"
+        echo -e "${RED}仓库 / Repository: ${name}${NC}" >&2
 
         case "$http_code" in
             401)
-                echo -e "${YELLOW}原因: 未授权，GitHub token 无效或已过期${NC}" >&2
-                echo -e "${YELLOW}解决方案:${NC}" >&2
-                echo -e "${CYAN}  请使用 'mt set-github-token <your_token>' 重新设置 token${NC}" >&2
-                echo -e "${CYAN}  获取新 token: https://github.com/settings/tokens${NC}" >&2
+                echo_bi_err "$YELLOW" "原因: 未授权，GitHub token 无效或已过期" "Reason: unauthorized, the GitHub token is invalid or expired"
+                echo_bi_err "$YELLOW" "解决方案:" "Suggested fix:"
+                echo -e "${CYAN}  请使用 'mt set-github-token <your_token>' 重新设置 token / Reset the token with 'mt set-github-token <your_token>'${NC}" >&2
+                echo -e "${CYAN}  获取新 token / Get a new token: https://github.com/settings/tokens${NC}" >&2
                 ;;
             403)
-                echo -e "${YELLOW}原因: 禁止访问，可能是 token 权限不足或仓库访问受限${NC}" >&2
-                echo -e "${YELLOW}解决方案:${NC}" >&2
-                echo -e "${CYAN}  1. 检查 token 是否有 'repo' 权限${NC}" >&2
-                echo -e "${CYAN}  2. 确认你有该仓库的访问权限${NC}" >&2
+                echo_bi_err "$YELLOW" "原因: 禁止访问，可能是 token 权限不足或仓库访问受限" "Reason: forbidden, the token may lack permission or repo access is restricted"
+                echo_bi_err "$YELLOW" "解决方案:" "Suggested fix:"
+                echo -e "${CYAN}  1. 检查 token 是否有 'repo' 权限 / Check whether the token has 'repo' scope${NC}" >&2
+                echo -e "${CYAN}  2. 确认你有该仓库的访问权限 / Confirm you have access to this repository${NC}" >&2
                 ;;
             404)
-                echo -e "${YELLOW}原因: 仓库或分支不存在${NC}" >&2
-                echo -e "${YELLOW}解决方案:${NC}" >&2
-                echo -e "${CYAN}  1. 确认仓库路径正确: ${repo_full_name}${NC}" >&2
-                echo -e "${CYAN}  2. 确认分支已推送到远程: git push origin ${source_branch}${NC}" >&2
+                echo_bi_err "$YELLOW" "原因: 仓库或分支不存在" "Reason: the repository or branch does not exist"
+                echo_bi_err "$YELLOW" "解决方案:" "Suggested fix:"
+                echo -e "${CYAN}  1. 确认仓库路径正确 / Confirm the repository path is correct: ${repo_full_name}${NC}" >&2
+                echo -e "${CYAN}  2. 确认分支已推送到远程 / Confirm the branch is pushed to the remote: git push origin ${source_branch}${NC}" >&2
                 ;;
             500|502|503|504)
-                echo -e "${YELLOW}原因: GitHub 服务器错误 (HTTP ${http_code})${NC}" >&2
-                echo -e "${YELLOW}解决方案:${NC}" >&2
-                echo -e "${CYAN}  请稍后重试${NC}" >&2
+                echo_bi_err "$YELLOW" "原因: GitHub 服务器错误 (HTTP ${http_code})" "Reason: GitHub server error (HTTP ${http_code})"
+                echo_bi_err "$YELLOW" "解决方案:" "Suggested fix:"
+                echo -e "${CYAN}  请稍后重试 / Please retry later${NC}" >&2
                 ;;
             *)
-                echo -e "${YELLOW}未知错误 (HTTP ${http_code})${NC}" >&2
+                echo -e "${YELLOW}未知错误 (HTTP ${http_code}) / Unknown error (HTTP ${http_code})${NC}" >&2
                 ;;
         esac
 
         if [[ -n "$body" ]]; then
-            echo -e "${YELLOW}响应内容:${NC}" >&2
+            echo_bi_err "$YELLOW" "响应内容:" "Response body:"
             local error_msg
             error_msg=$(echo "$body" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
             if [[ -n "$error_msg" ]]; then
@@ -784,7 +784,7 @@ update_pr_description() {
 EOF
 )
 
-    echo -e "${CYAN}更新 PR 描述...${NC}"
+    echo_bi "$CYAN" "更新 PR 描述..." "Updating PR description..."
     echo -e "${CYAN}  → curl -X PATCH ${api_url}${NC}"
     echo -e "${CYAN}  → Head: Authorization: token ***${NC}"
 
@@ -848,11 +848,11 @@ create_prs() {
     local token_exit_code=0
     capture_command_output github_token token_exit_code get_github_token
     if [[ $token_exit_code -ne 0 ]] || [[ -z "$github_token" ]]; then
-        echo -e "${BOLD_RED}错误: 未找到 GitHub token${NC}" >&2
-        echo -e "${YELLOW}请使用以下命令设置 GitHub token:${NC}" >&2
+        echo_bi_err "$BOLD_RED" "错误: 未找到 GitHub token" "Error: no GitHub token found"
+        echo_bi_err "$YELLOW" "请使用以下命令设置 GitHub token:" "Set a GitHub token with:"
         echo -e "${CYAN}  mt set-github-token <your_token>${NC}" >&2
-        echo -e "${YELLOW}Token 将保存到 github.token 文件（已添加到 .gitignore）${NC}" >&2
-        echo -e "${CYAN}获取 token: https://github.com/settings/tokens${NC}" >&2
+        echo_bi_err "$YELLOW" "Token 将保存到 github.token 文件（已添加到 .gitignore）" "The token is saved to the github.token file (already in .gitignore)"
+        echo -e "${CYAN}获取 token / Get a token: https://github.com/settings/tokens${NC}" >&2
         return 1
     fi
 
@@ -862,14 +862,14 @@ create_prs() {
     done < <(get_selected_repositories)
 
     if [[ -z "${repos_array[*]-}" ]]; then
-        echo -e "${BOLD_RED}错误: 没有匹配到任何仓库${NC}"
+        echo_bi "$BOLD_RED" "错误: 没有匹配到任何仓库" "Error: no repositories matched"
         return 1
     fi
 
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  创建 GitHub Pull Request${NC}"
+    echo_bi "$BLUE" "  创建 GitHub Pull Request" "  Creating GitHub Pull Request"
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${CYAN}目标分支: ${target_branch}${NC}"
+    echo_bi "$CYAN" "目标分支: ${target_branch}" "Target branch: ${target_branch}"
     echo ""
 
     local pr_urls_names=()
@@ -905,7 +905,7 @@ create_prs() {
         echo -e "${CYAN}[${index}/${total}] ${name}${NC}"
 
         if [[ ! -d "$repo_path" ]]; then
-            echo -e "${YELLOW}  ⏭  跳过: 路径不存在 ${path}${NC}"
+            echo -e "${YELLOW}  ⏭  跳过: 路径不存在 ${path} / Skipped: path not found ${path}${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("路径不存在")
             ((skipped_count++))
@@ -913,7 +913,7 @@ create_prs() {
         fi
 
         if ! is_git_repository_path "$repo_path"; then
-            echo -e "${YELLOW}  ⏭  跳过: 不是 Git 仓库 ${path}${NC}"
+            echo -e "${YELLOW}  ⏭  跳过: 不是 Git 仓库 ${path} / Skipped: not a Git repository ${path}${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("不是 Git 仓库")
             ((skipped_count++))
@@ -924,7 +924,7 @@ create_prs() {
         local current_branch_exit_code=0
         capture_command_output current_branch current_branch_exit_code get_current_branch "$repo_path"
         if [[ -z "$current_branch" ]]; then
-            echo -e "${YELLOW}  ⏭  跳过: 无法获取当前分支${NC}"
+            echo -e "${YELLOW}  ⏭  跳过: 无法获取当前分支 / Skipped: could not resolve the current branch${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("无法获取分支")
             ((failure_count++))
@@ -932,7 +932,7 @@ create_prs() {
         fi
 
         if [[ "$current_branch" == "$target_branch" ]]; then
-            echo -e "${YELLOW}  ⏭  跳过: 当前分支已是 ${target_branch}${NC}"
+            echo -e "${YELLOW}  ⏭  跳过: 当前分支已是 ${target_branch} / Skipped: current branch is already ${target_branch}${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("无代码变更")
             ((skipped_count++))
@@ -940,7 +940,7 @@ create_prs() {
         fi
 
         if [[ "$GLOBAL_DRY_RUN" == "true" ]]; then
-            echo -e "${YELLOW}  ⏭  dry-run: 将检查并创建/复用 PR（未实际执行）${NC}"
+            echo -e "${YELLOW}  ⏭  dry-run: 将检查并创建/复用 PR（未实际执行）/ dry-run: would check and create/reuse a PR (not executed)${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("dry-run")
             ((planned_count++))
@@ -956,8 +956,8 @@ create_prs() {
             has_uncommitted_changes=true
         fi
         if [[ "$has_uncommitted_changes" == true ]]; then
-            echo -e "${YELLOW}  ⚠  检测到未提交的本地修改（PR 只基于已提交并推送到远程的提交）${NC}"
-            echo -e "${YELLOW}  请先提交并推送后再执行 mt pr${NC}"
+            echo -e "${YELLOW}  ⚠  检测到未提交的本地修改（PR 只基于已提交并推送到远程的提交）/ Uncommitted local changes detected (PR only reflects committed, pushed commits)${NC}"
+            echo -e "${YELLOW}  请先提交并推送后再执行 mt pr / Please commit and push before running mt pr${NC}"
             echo -e "${CYAN}    git add . && git commit -m \"...\" && git push${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("需要先提交")
@@ -976,25 +976,25 @@ create_prs() {
             ahead_count=$(cd "$repo_path" && git rev-list --count "origin/${current_branch}..${current_branch}" 2>/dev/null || echo "0")
             behind_count=$(cd "$repo_path" && git rev-list --count "${current_branch}..origin/${current_branch}" 2>/dev/null || echo "0")
 
-            echo -e "${YELLOW}  ⚠  本地分支与远程分支不一致（PR 以远程分支为准）${NC}"
+            echo -e "${YELLOW}  ⚠  本地分支与远程分支不一致（PR 以远程分支为准）/ Local branch differs from remote (PR reflects the remote branch)${NC}"
 
             if [[ "$ahead_count" -gt 0 ]] && [[ "$behind_count" -eq 0 ]]; then
-                echo -e "${YELLOW}  本地领先 ${ahead_count} 个提交，请先推送:${NC}"
+                echo -e "${YELLOW}  本地领先 ${ahead_count} 个提交，请先推送 / Local is ${ahead_count} commit(s) ahead, please push first:${NC}"
                 echo -e "${CYAN}    git push origin ${current_branch}${NC}"
                 pr_status_names+=("$name")
                 pr_status_values+=("需要先推送")
             elif [[ "$ahead_count" -eq 0 ]] && [[ "$behind_count" -gt 0 ]]; then
-                echo -e "${YELLOW}  本地落后远程 ${behind_count} 个提交，请先同步:${NC}"
+                echo -e "${YELLOW}  本地落后远程 ${behind_count} 个提交，请先同步 / Local is ${behind_count} commit(s) behind, please sync first:${NC}"
                 echo -e "${CYAN}    git pull --rebase${NC}"
                 pr_status_names+=("$name")
                 pr_status_values+=("需要先同步")
             elif [[ "$ahead_count" -gt 0 ]] && [[ "$behind_count" -gt 0 ]]; then
-                echo -e "${YELLOW}  分支发生分叉（可能执行了 rebase/amend），请先推送（推荐 --force-with-lease）:${NC}"
+                echo -e "${YELLOW}  分支发生分叉（可能执行了 rebase/amend），请先推送（推荐 --force-with-lease）/ Branch has diverged (possibly rebase/amend); push first (--force-with-lease recommended):${NC}"
                 echo -e "${CYAN}    git push --force-with-lease origin ${current_branch}${NC}"
                 pr_status_names+=("$name")
                 pr_status_values+=("需要先推送")
             else
-                echo -e "${YELLOW}  请先推送/同步后再创建 PR${NC}"
+                echo -e "${YELLOW}  请先推送/同步后再创建 PR / Please push/sync before creating the PR${NC}"
                 pr_status_names+=("$name")
                 pr_status_values+=("需要先推送")
             fi
@@ -1015,10 +1015,10 @@ create_prs() {
             common_base=$(cd "$repo_path" && git merge-base "origin/${target_branch}" "$current_branch" 2>/dev/null || echo "")
 
             if [[ -z "$common_base" ]]; then
-                echo -e "${BOLD_YELLOW}警告: 无法判断是否有相对于 ${target_branch} 的代码变更（merge-base 失败）${NC}"
-                echo -e "${YELLOW}可能原因:${NC}"
-                echo -e "${CYAN}  1) 目标分支名不正确或未拉取（请尝试 git fetch origin ${target_branch}）${NC}"
-                echo -e "${CYAN}  2) 分支历史无共同祖先（需要检查分支来源）${NC}"
+                echo -e "${BOLD_YELLOW}警告: 无法判断是否有相对于 ${target_branch} 的代码变更（merge-base 失败）/ Warning: could not determine changes relative to ${target_branch} (merge-base failed)${NC}"
+                echo_bi "$YELLOW" "可能原因:" "Possible causes:"
+                echo -e "${CYAN}  1) 目标分支名不正确或未拉取（请尝试 git fetch origin ${target_branch}）/ The target branch name is wrong or not fetched (try git fetch origin ${target_branch})${NC}"
+                echo -e "${CYAN}  2) 分支历史无共同祖先（需要检查分支来源）/ The branches share no common ancestor (check the branch origin)${NC}"
                 pr_status_names+=("$name")
                 pr_status_values+=("无法比较")
                 ((action_required_count++))
@@ -1030,10 +1030,10 @@ create_prs() {
             has_local_diff=$(cd "$repo_path" && git diff --quiet "${common_base}..${current_branch}" 2>/dev/null && echo "no" || echo "yes")
 
             if [[ "$has_local_diff" == "yes" ]]; then
-                echo -e "${YELLOW}  ⚠  检测到本地有相对于 ${target_branch} 的提交差异，但远程分支未检测到变更${NC}"
-                echo -e "${YELLOW}  PR 以远程分支为准，请先推送当前分支到远程后再创建 PR:${NC}"
+                echo -e "${YELLOW}  ⚠  检测到本地有相对于 ${target_branch} 的提交差异，但远程分支未检测到变更 / Local has commits relative to ${target_branch}, but the remote branch shows no changes${NC}"
+                echo -e "${YELLOW}  PR 以远程分支为准，请先推送当前分支到远程后再创建 PR / PR reflects the remote branch; push the current branch first:${NC}"
                 echo -e "${CYAN}    git push origin ${current_branch}${NC}"
-                echo -e "${CYAN}    （如执行过 rebase/amend，推荐使用 --force-with-lease）${NC}"
+                echo -e "${CYAN}    （如执行过 rebase/amend，推荐使用 --force-with-lease）/ (if you ran rebase/amend, --force-with-lease is recommended)${NC}"
                 pr_status_names+=("$name")
                 pr_status_values+=("需要先推送")
                 ((action_required_count++))
@@ -1041,7 +1041,7 @@ create_prs() {
                 continue
             fi
 
-            echo -e "${YELLOW}  ⏭  跳过: 没有相对于 ${target_branch} 的代码变更${NC}"
+            echo -e "${YELLOW}  ⏭  跳过: 没有相对于 ${target_branch} 的代码变更 / Skipped: no changes relative to ${target_branch}${NC}"
             pr_status_names+=("$name")
             pr_status_values+=("无代码变更")
             ((skipped_count++))
@@ -1071,7 +1071,7 @@ create_prs() {
             pr_status_names+=("$name")
             pr_status_values+=("$existing_pr_url")
             ((success_count++))
-            echo -e "${GREEN}  ${CHECK_MARK} PR 已存在${NC}"
+            echo -e "${GREEN}  ${CHECK_MARK} PR 已存在 / PR already exists${NC}"
             echo -e "${CYAN}    ${existing_pr_url}${NC}"
 
             local summary_desc="${pr_description:-}"
@@ -1081,7 +1081,7 @@ create_prs() {
             summary_desc=$(echo "$summary_desc" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^ //; s/ $//')
             summary_desc="${summary_desc//|/ }"
             if [[ -z "$summary_desc" ]]; then
-                summary_desc="无描述"
+                summary_desc="无描述 / No description"
             fi
             review_summary_names+=("$name")
             review_summary_urls+=("$existing_pr_url")
@@ -1094,15 +1094,15 @@ create_prs() {
                     pr_number=$(extract_pr_number_from_url "$existing_pr_url")
                     if [[ -n "$pr_number" ]] && [[ -n "$repo_full_name" ]]; then
                         if mark_pr_ready_for_review "$repo_full_name" "$pr_number" "$github_token"; then
-                            echo -e "${GREEN}  ${CHECK_MARK} 已设置为 Ready${NC}"
+                            echo -e "${GREEN}  ${CHECK_MARK} 已设置为 Ready / Marked as Ready${NC}"
                         else
-                            echo -e "${BOLD_YELLOW}  警告: 设置 Ready 失败${NC}"
+                            echo -e "${BOLD_YELLOW}  警告: 设置 Ready 失败 / Warning: failed to mark as Ready${NC}"
                         fi
                     else
-                        echo -e "${BOLD_YELLOW}  警告: 无法解析 PR 号，跳过 Ready${NC}"
+                        echo -e "${BOLD_YELLOW}  警告: 无法解析 PR 号，跳过 Ready / Warning: could not resolve the PR number, skipping Ready${NC}"
                     fi
                 else
-                    echo -e "${BOLD_YELLOW}  警告: 当前版本不支持设置 Ready，请升级 mt${NC}"
+                    echo -e "${BOLD_YELLOW}  警告: 当前版本不支持设置 Ready，请升级 mt / Warning: this version does not support marking as Ready, please upgrade mt${NC}"
                 fi
             fi
             echo ""
@@ -1127,7 +1127,7 @@ create_prs() {
                 pr_status_names+=("$name")
                 pr_status_values+=("$pr_url")
                 ((success_count++))
-                echo -e "${GREEN}  ${CHECK_MARK} PR 创建成功${NC}"
+                echo -e "${GREEN}  ${CHECK_MARK} PR 创建成功 / PR created successfully${NC}"
                 echo -e "${CYAN}    ${pr_url}${NC}"
 
                 local summary_desc="${pr_description:-}"
@@ -1137,7 +1137,7 @@ create_prs() {
                 summary_desc=$(echo "$summary_desc" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^ //; s/ $//')
                 summary_desc="${summary_desc//|/ }"
                 if [[ -z "$summary_desc" ]]; then
-                    summary_desc="无描述"
+                    summary_desc="无描述 / No description"
                 fi
                 review_summary_names+=("$name")
                 review_summary_urls+=("$pr_url")
@@ -1150,30 +1150,30 @@ create_prs() {
                         pr_number=$(extract_pr_number_from_url "$pr_url")
                         if [[ -n "$pr_number" ]] && [[ -n "$repo_full_name" ]]; then
                             if mark_pr_ready_for_review "$repo_full_name" "$pr_number" "$github_token"; then
-                                echo -e "${GREEN}  ${CHECK_MARK} 已设置为 Ready${NC}"
+                                echo -e "${GREEN}  ${CHECK_MARK} 已设置为 Ready / Marked as Ready${NC}"
                             else
-                                echo -e "${BOLD_YELLOW}  警告: 设置 Ready 失败${NC}"
+                                echo -e "${BOLD_YELLOW}  警告: 设置 Ready 失败 / Warning: failed to mark as Ready${NC}"
                             fi
                         else
-                            echo -e "${BOLD_YELLOW}  警告: 无法解析 PR 号，跳过 Ready${NC}"
+                            echo -e "${BOLD_YELLOW}  警告: 无法解析 PR 号，跳过 Ready / Warning: could not resolve the PR number, skipping Ready${NC}"
                         fi
                     else
-                        echo -e "${BOLD_YELLOW}  警告: 当前版本不支持设置 Ready，请升级 mt${NC}"
+                        echo -e "${BOLD_YELLOW}  警告: 当前版本不支持设置 Ready，请升级 mt / Warning: this version does not support marking as Ready, please upgrade mt${NC}"
                     fi
                 fi
             elif [[ "$pr_url" == "PR_EXISTS" ]] && [[ "$pr_exit_code" -eq 0 ]]; then
                 pr_status_names+=("$name")
                 pr_status_values+=("PR 已存在")
                 ((success_count++))
-                echo -e "${GREEN}  ${CHECK_MARK} PR 已存在${NC}"
+                echo -e "${GREEN}  ${CHECK_MARK} PR 已存在 / PR already exists${NC}"
             elif [[ "$pr_exit_code" -eq 2 ]]; then
                 local historical_status="历史 PR 存在"
                 if echo "$pr_error_output" | grep -q "历史 PR 已合并"; then
-                    historical_status="历史 PR 已合并"
+                    historical_status="历史 PR 已合并 / Historical PR already merged"
                 elif echo "$pr_error_output" | grep -q "历史 PR 已关闭"; then
-                    historical_status="历史 PR 已关闭"
+                    historical_status="历史 PR 已关闭 / Historical PR closed"
                 elif [[ -z "$pr_url" ]]; then
-                    historical_status="PR 已存在（未解析到链接）"
+                    historical_status="PR 已存在（未解析到链接）/ PR already exists (link not resolved)"
                 fi
 
                 if [[ -n "$pr_url" ]] && echo "$pr_url" | grep -q "github.com"; then
@@ -1183,21 +1183,21 @@ create_prs() {
                 pr_status_names+=("$name")
                 pr_status_values+=("$historical_status")
                 ((action_required_count++))
-                echo -e "${BOLD_YELLOW}  警告: ${historical_status}${NC}"
+                echo -e "${BOLD_YELLOW}  警告 / Warning: ${historical_status}${NC}"
             elif echo "$pr_url" | grep -q "可能导致冲突" || echo "$pr_error_output" | grep -q "可能导致冲突"; then
                 pr_status_names+=("$name")
                 pr_status_values+=("需要解决冲突")
                 ((action_required_count++))
-                echo -e "${RED}  ${CROSS_MARK} 需要解决冲突（见上方提示）${NC}"
+                echo -e "${RED}  ${CROSS_MARK} 需要解决冲突（见上方提示）/ Conflicts need resolving (see hints above)${NC}"
             else
                 pr_status_names+=("$name")
                 pr_status_values+=("创建失败")
                 ((failure_count++))
                 if [[ -z "$pr_error_output" ]] && [[ $pr_exit_code -ne 0 ]]; then
-                    echo -e "${RED}  ${CROSS_MARK} PR 创建失败（退出码: ${pr_exit_code}）${NC}"
-                    echo -e "${YELLOW}  提示: 请检查网络连接、GitHub token 权限和分支状态${NC}"
+                    echo -e "${RED}  ${CROSS_MARK} PR 创建失败（退出码: ${pr_exit_code}）/ PR creation failed (exit code: ${pr_exit_code})${NC}"
+                    echo -e "${YELLOW}  提示: 请检查网络连接、GitHub token 权限和分支状态 / Tip: check your network connection, GitHub token permissions, and branch state${NC}"
                 else
-                    echo -e "${RED}  ${CROSS_MARK} PR 创建失败（见上方错误信息）${NC}"
+                    echo -e "${RED}  ${CROSS_MARK} PR 创建失败（见上方错误信息）/ PR creation failed (see error above)${NC}"
                 fi
             fi
         fi
@@ -1215,13 +1215,13 @@ create_prs() {
     done
 
     if [[ ${#pr_urls_names[@]} -gt 1 ]]; then
-        echo -e "${BLUE}更新 PR 描述，添加关联链接...${NC}"
+        echo_bi "$BLUE" "更新 PR 描述，添加关联链接..." "Updating PR descriptions with cross-links..."
         echo ""
 
         for i in "${!pr_urls_names[@]}"; do
             local repo_name="${pr_urls_names[$i]}"
             local pr_url="${pr_urls_values[$i]}"
-            local related_links="## 相关 PR"$'\n'$'\n'
+            local related_links="## 相关 PR / Related PRs"$'\n'$'\n'
             for j in "${!pr_urls_names[@]}"; do
                 local other_repo="${pr_urls_names[$j]}"
                 local other_url="${pr_urls_values[$j]}"
@@ -1238,9 +1238,9 @@ create_prs() {
                     local new_description="${original_description}"$'\n'$'\n'"${related_links}"
 
                     if update_pr_description "$repo_path" "$repo_info" "$pr_url" "$new_description" "$github_token"; then
-                        echo -e "${GREEN}${CHECK_MARK} 已更新 ${repo_name} 的 PR 描述${NC}"
+                        echo -e "${GREEN}${CHECK_MARK} 已更新 ${repo_name} 的 PR 描述 / Updated the PR description for ${repo_name}${NC}"
                     else
-                        echo -e "${BOLD_YELLOW}警告: 更新 ${repo_name} 的 PR 描述失败${NC}"
+                        echo -e "${BOLD_YELLOW}警告: 更新 ${repo_name} 的 PR 描述失败 / Warning: failed to update the PR description for ${repo_name}${NC}"
                     fi
                     break
                 fi
@@ -1251,11 +1251,11 @@ create_prs() {
 
     echo ""
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  PR 创建结果汇总${NC}"
+    echo_bi "$BLUE" "  PR 创建结果汇总" "  PR creation summary"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
-    printf "%-30s %s\n" "仓库" "状态/PR 链接"
+    printf "%-30s %s\n" "仓库 / Repository" "状态或 PR 链接 / Status or PR URL"
     echo "────────────────────────────────────────────────────────────────"
 
     for repo_info in "${repos_array[@]}"; do
@@ -1273,45 +1273,63 @@ create_prs() {
 
         if [[ "$found" == true ]]; then
             if [[ "$status" == "无改动" ]] || [[ "$status" == "无代码变更" ]]; then
-                printf "%-30s %s\n" "$name:" "无代码变更"
+                printf "%-30s %s\n" "$name:" "无代码变更 / No code changes"
             elif [[ "$status" == "需要先推送" ]]; then
-                printf "%-30s %s\n" "$name:" "需要先推送（本地有未推送的提交）"
-            elif [[ "$status" == "创建失败" ]] || [[ "$status" == "路径不存在" ]] || [[ "$status" == "无法获取分支" ]]; then
-                printf "%-30s %s\n" "$name:" "$status"
+                printf "%-30s %s\n" "$name:" "需要先推送（本地有未推送的提交）/ Needs push (local has unpushed commits)"
+            elif [[ "$status" == "创建失败" ]]; then
+                printf "%-30s %s\n" "$name:" "创建失败 / Creation failed"
+            elif [[ "$status" == "路径不存在" ]]; then
+                printf "%-30s %s\n" "$name:" "路径不存在 / Path not found"
+            elif [[ "$status" == "无法获取分支" ]]; then
+                printf "%-30s %s\n" "$name:" "无法获取分支 / Could not resolve branch"
+            elif [[ "$status" == "不是 Git 仓库" ]]; then
+                printf "%-30s %s\n" "$name:" "不是 Git 仓库 / Not a Git repository"
+            elif [[ "$status" == "需要先提交" ]]; then
+                printf "%-30s %s\n" "$name:" "需要先提交 / Needs commit first"
+            elif [[ "$status" == "需要先同步" ]]; then
+                printf "%-30s %s\n" "$name:" "需要先同步 / Needs sync first"
+            elif [[ "$status" == "无法比较" ]]; then
+                printf "%-30s %s\n" "$name:" "无法比较 / Could not compare"
+            elif [[ "$status" == "需要解决冲突" ]]; then
+                printf "%-30s %s\n" "$name:" "需要解决冲突 / Conflicts need resolving"
+            elif [[ "$status" == "dry-run" ]]; then
+                printf "%-30s %s\n" "$name:" "dry-run（未实际执行）/ dry-run (not executed)"
+            elif [[ "$status" == "PR 已存在" ]]; then
+                printf "%-30s %s\n" "$name:" "PR 已存在 / PR already exists"
             else
                 printf "%-30s %s\n" "$name:" "$status"
             fi
         else
-            printf "%-30s %s\n" "$name:" "未处理"
+            printf "%-30s %s\n" "$name:" "未处理 / Not processed"
         fi
     done
 
     echo ""
     echo -e "${BLUE}========================================${NC}"
     if [[ $success_count -gt 0 ]]; then
-        echo -e "${GREEN}${CHECK_MARK} 成功创建/复用 ${success_count} 个 open PR${NC}"
+        echo -e "${GREEN}${CHECK_MARK} 成功创建/复用 ${success_count} 个 open PR / Created/reused ${success_count} open PR(s)${NC}"
     fi
     if [[ $skipped_count -gt 0 ]]; then
-        echo -e "${YELLOW}⏭  跳过 ${skipped_count} 个仓库${NC}"
+        echo -e "${YELLOW}⏭  跳过 ${skipped_count} 个仓库 / Skipped ${skipped_count} repository(ies)${NC}"
     fi
     if [[ $planned_count -gt 0 ]]; then
-        echo -e "${CYAN}⏭  dry-run 计划 ${planned_count} 个仓库${NC}"
+        echo -e "${CYAN}⏭  dry-run 计划 ${planned_count} 个仓库 / dry-run planned for ${planned_count} repository(ies)${NC}"
     fi
     if [[ $action_required_count -gt 0 ]]; then
-        echo -e "${BOLD_YELLOW}⚠  ${action_required_count} 个仓库需要人工处理${NC}"
+        echo -e "${BOLD_YELLOW}⚠  ${action_required_count} 个仓库需要人工处理 / ${action_required_count} repository(ies) need manual action${NC}"
     fi
     if [[ $failure_count -gt 0 ]]; then
-        echo -e "${BOLD_RED}${CROSS_MARK} ${failure_count} 个仓库创建 PR 失败${NC}"
+        echo -e "${BOLD_RED}${CROSS_MARK} ${failure_count} 个仓库创建 PR 失败 / Failed to create PR for ${failure_count} repository(ies)${NC}"
     fi
     if [[ $success_count -eq 0 ]] && [[ $skipped_count -eq 0 ]] && [[ $planned_count -eq 0 ]] && [[ $action_required_count -eq 0 ]] && [[ $failure_count -eq 0 ]]; then
-        echo -e "${YELLOW}没有创建任何 PR${NC}"
+        echo -e "${YELLOW}没有创建任何 PR / No PRs were created${NC}"
     fi
     echo -e "${BLUE}========================================${NC}"
 
     if [[ ${#review_summary_urls[@]} -gt 0 ]]; then
         echo ""
         echo -e "${BLUE}========================================${NC}"
-        echo -e "${BLUE}  Review 群发布摘要${NC}"
+        echo_bi "$BLUE" "  Review 群发布摘要" "  Review broadcast summary"
         echo -e "${BLUE}========================================${NC}"
         echo ""
 
@@ -1321,14 +1339,14 @@ create_prs() {
             local desc="${review_summary_descs[$i]}"
             local author="${review_summary_authors[$i]}"
             echo "[${repo_name}]"
-            echo "  作者: ${author}"
-            echo "  变更: ${desc}"
+            echo "  作者 / Author: ${author}"
+            echo "  变更 / Changes: ${desc}"
             echo "  PR: ${pr_url}"
             echo ""
         done
 
         echo ""
-        echo "注：本PR review由mt工具创建"
+        echo "注：本 PR review 由 mt 工具创建 / Note: this PR review was created by the mt tool"
 
         echo ""
         echo -e "${BLUE}========================================${NC}"

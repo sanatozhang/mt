@@ -1,9 +1,26 @@
 # Changelog
 
+中文 | [English](CHANGELOG.en.md)
+
 所有重要的变更都会记录在这个文件中。
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [2.1.0] - 2026-07-29
+
+### 新增
+
+#### 中英双语输出
+- `bin/` 下所有用户可见输出（提示、错误、帮助文本、安装向导）全面支持中英双语，一条提示中文在前、英文在后
+- 新增 `echo_bi` / `echo_bi_err`（`bin/lib/mt_core.sh`）双语输出助手，`bin/install-mt.sh` 因是独立分发脚本自带一份同名实现
+- `mt help` 完整帮助文本双语化，`mt init` 在帮助文本与 README 中标注为新人入职后应执行的第一条命令
+- `README.md` / `CHANGELOG.md` 新增语言切换链接，并新增 `README.en.md` / `CHANGELOG.en.md` 完整英文版
+
+### 不变（向后兼容）
+
+- 所有命令的行为、退出码、`--json` 输出的字段结构与 key 均未改变，仅 `message`/`summary` 等展示型文本追加了英文
+- 内部作为哨兵值比较的字符串（如 `mt status` 的"没有变化"、`mt pr` 的 PR 状态码）保持原文不变，只在展示处双语化
 
 ## [2.0.1] - 2026-05-28
 
